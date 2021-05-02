@@ -1,0 +1,61 @@
+common_rsync_options="--no-motd --timeout 14400"
+max_propagation_days = 2
+max_stale_days = 3
+excludes=[".*\\.snapshot", ".*/\\.~tmp~"]
+skip_paths_for_version=["pub/alt"]
+test_paths=["/test/", "/stage/"]
+skip_repository_paths = ["Cloud", "Workstation", "Server", "el/rpi/8/src"]
+
+[database]
+url="postgresql://localhost/mmtest"
+
+[[category]]
+name="RPMFUSION free EL"
+type="rsync"
+url="rsync://download1.rpmfusion.org/rpmfusion/free/el/"
+options="--exclude=nothing --port=873"
+checksum_base="https://download1.rpmfusion.org/"
+excludes=["somethingsomething"]
+
+[[category]]
+name="RPMFUSION free Fedora"
+type="rsync"
+url="rsync://lisas.de/rpmfusion/free/fedora/"
+options="--exclude=nothing --port=873"
+checksum_base="https://ftp-stud.hs-esslingen.de/pub/Mirrors/rpmfusion.org/"
+
+[[repository_mapping]]
+regex="^free/fedora/updates/[\\.\\d]+/.*"
+prefix="free-fedora-updates-released"
+
+[[repository_mapping]]
+regex="^free/fedora/updates/testing/[\\.\\d]+/.*"
+prefix="free-fedora-updates-testing"
+
+[[repository_mapping]]
+regex="^free/fedora/tainted/[\\.\\d]+/.*"
+prefix="free-fedora-tainted"
+
+[[repository_mapping]]
+regex="^free/el/rpi/[\\.\\d]+/.*"
+prefix="free-el-rpi"
+
+[[repository_mapping]]
+regex="^free/el/tainted/[\\.\\d]+/.*"
+prefix="free-el-tainted"
+
+[[repository_mapping]]
+regex="^free/el/updates/[\\.\\d]+/.*"
+prefix="free-el-updates-released"
+
+[[repository_mapping]]
+regex="^free/el/updates/testing/[\\.\\d]+/.*"
+prefix="free-el-updates-testing"
+
+[[repository_mapping]]
+regex="^free/el/releases/[\\.\\d]+/.*"
+prefix="free-el"
+
+[[repository_mapping]]
+regex="^free/fedora/(releases|development)/[\\.\\d]+/.*"
+prefix="free-fedora"
