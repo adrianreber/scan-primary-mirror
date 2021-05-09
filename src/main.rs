@@ -214,6 +214,7 @@ fn guess_ver_arch_from_path(
     versions: &mut Vec<db::models::Version>,
     product_id: i32,
     test_paths: &[String],
+    do_not_display_paths: &[String],
 ) -> Result<(String, i32, i32), Box<dyn Error>> {
     let mut arch_id: i32 = -1;
     let mut version_id: i32 = -1;
@@ -254,9 +255,16 @@ fn guess_ver_arch_from_path(
         if !version.is_empty() {
             // Version does not exist yet in the database. Let's create it
             let mut is_test = false;
+            let mut display = true;
             for tp in test_paths {
                 if path.contains(tp) {
                     is_test = true;
+                    break;
+                }
+            }
+            for tp in do_not_display_paths {
+                if path.contains(tp) {
+                    display = false;
                     break;
                 }
             }
@@ -265,7 +273,7 @@ fn guess_ver_arch_from_path(
                 db::schema::version::dsl::name.eq(version),
                 db::schema::version::dsl::sortorder.eq(0),
                 db::schema::version::dsl::is_test.eq(is_test),
-                db::schema::version::dsl::display.eq(true),
+                db::schema::version::dsl::display.eq(display),
                 db::schema::version::dsl::ordered_mirrorlist.eq(true),
             ));
             debug::STEPS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -456,6 +464,9 @@ struct FindRepositories<'a> {
     /// If one of the following strings is part of the repository
     /// path the repository creation will be skipped.
     skip_repository_paths: &'a [String],
+    /// If one of the following strings is part of the path
+    /// a newly created version will be set to display = false
+    do_not_display_paths: &'a [String],
 }
 
 /// Find repositories in the list of scanned directories.
@@ -517,6 +528,7 @@ fn find_repositories(p: &mut FindRepositories) -> Result<usize, Box<dyn Error>> 
                 &mut versions,
                 p.cat.product_id,
                 p.test_paths,
+                p.do_not_display_paths,
             )?;
             if version_id == -1 {
                 println!("Not able to guess version for {}", with_topdir);
@@ -1195,6 +1207,10 @@ fn main() {
         Some(ex) => ex.to_vec(),
         _ => vec![],
     };
+    let do_not_display_paths: Vec<String> = match &settings.do_not_display_paths {
+        Some(ex) => ex.to_vec(),
+        _ => vec![],
+    };
     let mut fds = db::functions::get_file_details(&connection);
     let mut find_parameter = FindRepositories {
         c: &connection,
@@ -1208,6 +1224,7 @@ fn main() {
         skip_paths: &skip_paths,
         test_paths: &test_paths,
         skip_repository_paths: &skip_repository_paths,
+        do_not_display_paths: &do_not_display_paths,
     };
     if let Err(e) = find_repositories(&mut find_parameter) {
         println!("Creating repositories in database failed {}", e);

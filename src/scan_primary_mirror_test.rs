@@ -334,6 +334,22 @@ fn is_excluded_test() {
     ));
 }
 
+fn get_insert_versions(
+    c: &PgConnection,
+) -> Result<Vec<db::models::InsertVersion>, diesel::result::Error> {
+    use crate::db::schema::version::dsl::*;
+    let query = version.select((
+        id,
+        name,
+        product_id,
+        is_test,
+        sortorder,
+        display,
+        ordered_mirrorlist,
+    ));
+    query.load::<db::models::InsertVersion>(c)
+}
+
 #[test]
 fn guess_ver_arch_from_path_test() {
     let c = match get_db_connection() {
@@ -357,6 +373,7 @@ fn guess_ver_arch_from_path_test() {
 
     let mut versions: Vec<db::models::Version> = Vec::new();
     let mut test_paths: Vec<String> = Vec::new();
+    let mut do_not_display_paths: Vec<String> = Vec::new();
 
     match guess_ver_arch_from_path(
         &c,
@@ -365,6 +382,7 @@ fn guess_ver_arch_from_path_test() {
         &mut versions,
         87,
         &test_paths,
+        &do_not_display_paths,
     ) {
         Ok(_) => assert!(false),
         Err(e) => assert_eq!(format!("{}", e), "Not able to figure out architecture"),
@@ -377,6 +395,7 @@ fn guess_ver_arch_from_path_test() {
         &mut versions,
         87,
         &test_paths,
+        &do_not_display_paths,
     ) {
         Ok(r) => r,
         Err(e) => {
@@ -396,6 +415,7 @@ fn guess_ver_arch_from_path_test() {
         &mut versions,
         87,
         &test_paths,
+        &do_not_display_paths,
     ) {
         Ok(r) => r,
         Err(e) => {
@@ -434,6 +454,7 @@ fn guess_ver_arch_from_path_test() {
         &mut versions,
         87,
         &test_paths,
+        &do_not_display_paths,
     ) {
         Ok(r) => r,
         Err(e) => {
@@ -446,7 +467,7 @@ fn guess_ver_arch_from_path_test() {
     assert_eq!("8.88", result.0);
     assert_eq!(43, result.2);
 
-    versions = match db::functions::get_versions(&c) {
+    let mut insert_versions = match get_insert_versions(&c) {
         Ok(v) => v,
         Err(e) => {
             println!("{}", e);
@@ -454,8 +475,51 @@ fn guess_ver_arch_from_path_test() {
             Vec::new()
         }
     };
-    assert_eq!(1, versions.len());
-    assert_eq!("8.88", versions[0].name);
-    assert_eq!(true, versions[0].is_test);
-    assert_eq!(87, versions[0].product_id);
+    assert_eq!(1, insert_versions.len());
+    assert_eq!("8.88", insert_versions[0].name);
+    assert_eq!(true, insert_versions[0].is_test);
+    assert_eq!(true, insert_versions[0].display);
+    assert_eq!(87, insert_versions[0].product_id);
+
+    // clean tables for test
+    assert!(!diesel::delete(db::schema::version::dsl::version)
+        .execute(&c)
+        .is_err());
+    versions = Vec::new();
+    do_not_display_paths = vec!["_Beta".to_string()];
+
+    test_paths.push("/with/".to_string());
+    result = match guess_ver_arch_from_path(
+        &c,
+        "path/with/unexp/8.88_Beta/something".to_string(),
+        &arches,
+        &mut versions,
+        87,
+        &test_paths,
+        &do_not_display_paths,
+    ) {
+        Ok(r) => r,
+        Err(e) => {
+            println!("{}", e);
+            assert!(false);
+            ("".to_string(), -1, -1)
+        }
+    };
+
+    assert_eq!("8.88_Beta", result.0);
+    assert_eq!(43, result.2);
+
+    insert_versions = match get_insert_versions(&c) {
+        Ok(v) => v,
+        Err(e) => {
+            println!("{}", e);
+            assert!(false);
+            Vec::new()
+        }
+    };
+    assert_eq!(1, insert_versions.len());
+    assert_eq!("8.88_Beta", insert_versions[0].name);
+    assert_eq!(true, insert_versions[0].is_test);
+    assert_eq!(false, insert_versions[0].display);
+    assert_eq!(87, insert_versions[0].product_id);
 }
