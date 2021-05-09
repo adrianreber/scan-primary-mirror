@@ -62,6 +62,9 @@ pub struct Settings {
     /// Comma separated list of path elements which should skip
     /// repository creation.
     pub skip_repository_paths: Option<Vec<String>>,
+    /// Comma separated list of path elements which should not be
+    /// shown in the mirror list matrix
+    pub do_not_display_paths: Option<Vec<String>>,
     /// At least one category is required
     pub category: Option<Vec<Category>>,
     /// Used to create repository prefixes
