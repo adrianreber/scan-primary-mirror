@@ -246,7 +246,16 @@ fn guess_ver_arch_from_path(
         let pattern = Regex::new(format!(r".*(^|/){}(/|$).*", &v.name).as_str()).unwrap();
         if pattern.is_match(&path) && product_id == v.product_id {
             version_id = v.id;
-            version_name = v.name;
+            if v.name == *"development" {
+                // This, just like the SRPMS <-> source connection above is a bit
+                // unfortunate and hard coded for now. Can easily be pulled into
+                // the configuration file if necessary.
+                // In the database the version is called 'development' but the
+                // repository prefix uses 'rawhide' as the version string.
+                version_name = "rawhide".to_string();
+            } else {
+                version_name = v.name;
+            }
         }
     }
 
@@ -323,7 +332,11 @@ fn repo_prefix(path: String, version: String, rms: &[settings::RepositoryMapping
         };
 
         if pattern.is_match(&path) {
-            return format!("{}{}-{}", rm.prefix, is_source_or_debug, version);
+            if version == *"rawhide" {
+                return format!("{}-{}{}", rm.prefix, version, is_source_or_debug);
+            } else {
+                return format!("{}{}-{}", rm.prefix, is_source_or_debug, version);
+            }
         }
     }
 
