@@ -71,6 +71,14 @@ fn repo_prefix_test() {
         repo_prefix("path/SRPMS/debug".to_string(), "76".to_string(), &rms)
     );
     assert_eq!(
+        "some-source-76",
+        repo_prefix("path/source/repodata".to_string(), "76".to_string(), &rms)
+    );
+    assert_eq!(
+        "some-source-76",
+        repo_prefix("path/src/repodata".to_string(), "76".to_string(), &rms)
+    );
+    assert_eq!(
         "some-debug-76",
         repo_prefix("path/debug/os".to_string(), "76".to_string(), &rms)
     );
@@ -522,4 +530,60 @@ fn guess_ver_arch_from_path_test() {
     assert_eq!(true, insert_versions[0].is_test);
     assert_eq!(false, insert_versions[0].display);
     assert_eq!(87, insert_versions[0].product_id);
+}
+
+#[test]
+fn guess_ver_arch_from_path_test_with_rawhide() {
+    let c = match get_db_connection() {
+        Ok(c) => c,
+        Err(e) => {
+            println!("Database connection failed {}", e);
+            assert!(false);
+            return;
+        }
+    };
+
+    // clean tables for test
+    assert!(!diesel::delete(db::schema::version::dsl::version)
+        .execute(&c)
+        .is_err());
+
+    let arches = vec![db::models::Arch {
+        id: 43,
+        name: "unexp".to_string(),
+    }];
+
+    let mut versions = vec![db::models::Version {
+        id: 783,
+        name: "development".to_string(),
+        product_id: 87,
+        is_test: false,
+    }];
+    let test_paths: Vec<String> = Vec::new();
+    let do_not_display_paths: Vec<String> = Vec::new();
+
+    let result = match guess_ver_arch_from_path(
+        &c,
+        "path/development/unexp/rawhide/something".to_string(),
+        &arches,
+        &mut versions,
+        87,
+        &test_paths,
+        &do_not_display_paths,
+    ) {
+        Ok(r) => r,
+        Err(e) => {
+            println!("{}", e);
+            assert!(false);
+            ("".to_string(), -1, -1)
+        }
+    };
+
+    assert_eq!("rawhide".to_string(), result.0);
+    assert_eq!(43, result.2);
+
+    // clean tables after test
+    assert!(!diesel::delete(db::schema::version::dsl::version)
+        .execute(&c)
+        .is_err());
 }
