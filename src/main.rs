@@ -228,7 +228,7 @@ fn guess_ver_arch_from_path(
         }
     }
 
-    if arch_id == -1 && path.contains("SRPMS") {
+    if arch_id == -1 && (path.contains("SRPMS") || path.contains("/src")) {
         for a in arches {
             if a.name == "source" {
                 arch_id = a.id;
@@ -307,7 +307,7 @@ fn guess_ver_arch_from_path(
 fn repo_prefix(path: String, version: String, rms: &[settings::RepositoryMapping]) -> String {
     let mut is_source_or_debug = String::new();
 
-    if path.contains("/source") || path.contains("/SRPMS") {
+    if path.contains("/source") || path.contains("/SRPMS") || path.contains("/src") {
         is_source_or_debug = String::from("-source");
     } else if path.contains("/debug") {
         is_source_or_debug = String::from("-debug");
