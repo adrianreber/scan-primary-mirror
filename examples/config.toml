@@ -4,10 +4,17 @@ max_stale_days = 3
 excludes=[".*\\.snapshot", ".*/\\.~tmp~"]
 skip_paths_for_version=["pub/alt"]
 test_paths=["/test/", "/stage/"]
-skip_repository_paths = ["Cloud", "Workstation", "Server", "el/rpi/8/src"]
+skip_repository_paths = ["Cloud", "Workstation", "Server", "rpi/33/src", "rpi/34/src"]
+do_not_display_paths = ["_Beta"]
 
 [database]
 url="postgresql://localhost/mmtest"
+
+[[category]]
+name="RPMFUSION nonfree EL"
+type="rsync"
+url="rsync://download1.rpmfusion.org/rpmfusion/nonfree/el/"
+checksum_base="https://download1.rpmfusion.org/"
 
 [[category]]
 name="RPMFUSION free EL"
@@ -37,12 +44,20 @@ regex="^free/fedora/tainted/[\\.\\d]+/.*"
 prefix="free-fedora-tainted"
 
 [[repository_mapping]]
+regex="^free/fedora/rpi/[\\.\\d]+/.*"
+prefix="free-fedora-rpi"
+
+[[repository_mapping]]
 regex="^free/el/rpi/[\\.\\d]+/.*"
 prefix="free-el-rpi"
 
 [[repository_mapping]]
 regex="^free/el/tainted/[\\.\\d]+/.*"
 prefix="free-el-tainted"
+
+[[repository_mapping]]
+regex="^nonfree/el/tainted/[\\.\\d]+/.*"
+prefix="nonfree-el-tainted"
 
 [[repository_mapping]]
 regex="^free/el/updates/[\\.\\d]+/.*"
@@ -57,5 +72,17 @@ regex="^free/el/releases/[\\.\\d]+/.*"
 prefix="free-el"
 
 [[repository_mapping]]
-regex="^free/fedora/(releases|development)/[\\.\\d]+/.*"
+regex="^nonfree/el/updates/[\\.\\d]+/.*"
+prefix="nonfree-el-updates-released"
+
+[[repository_mapping]]
+regex="^nonfree/el/updates/testing/[\\.\\d]+/.*"
+prefix="nonfree-el-updates-testing"
+
+[[repository_mapping]]
+regex="^nonfree/el/releases/[\\.\\d]+/.*"
+prefix="nonfree-el"
+
+[[repository_mapping]]
+regex="^free/fedora/(releases|development)/(rawhide|[\\.\\d]+)/.*"
 prefix="free-fedora"
