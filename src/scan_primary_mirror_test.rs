@@ -587,3 +587,48 @@ fn guess_ver_arch_from_path_test_with_rawhide() {
         .execute(&c)
         .is_err());
 }
+
+#[test]
+fn get_timestamp_test() {
+    let mut xml1 = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+    xml1.push_str("<repomd>");
+    xml1.push_str("<revision>8.3</revision>");
+    let mut ts = xml::get_timestamp(xml1.clone());
+    assert_eq!(0, ts);
+
+    let mut xml2 = xml1.clone();
+    xml2.push_str("<data><timestamp>7</timestamp></data>");
+    ts = xml::get_timestamp(xml2.clone());
+    assert_eq!(0, ts);
+
+    xml2.push_str("</repomd>");
+    ts = xml::get_timestamp(xml2.clone());
+    assert_eq!(7, ts);
+
+    xml2 = xml1.clone();
+    xml2.push_str("<data><timestamp>r</timestamp></data>");
+    xml2.push_str("</repomd>");
+    ts = xml::get_timestamp(xml2.clone());
+    assert_eq!(-1, ts);
+
+    xml2 = xml1.clone();
+    xml2.push_str("<data><timestamp>7.r</timestamp></data>");
+    xml2.push_str("</repomd>");
+    ts = xml::get_timestamp(xml2.clone());
+    assert_eq!(-1, ts);
+
+    xml2 = xml1.clone();
+    xml2.push_str("<data><timestamp>7.9</timestamp></data>");
+    xml2.push_str("</repomd>");
+    ts = xml::get_timestamp(xml2.clone());
+    assert_eq!(7, ts);
+
+    xml2 = xml1.clone();
+    xml2.push_str("<data><timestamp>7.9</timestamp></data>");
+    xml2.push_str("<data><timestamp>9</timestamp></data>");
+    xml2.push_str("<data><timestamp>-1</timestamp></data>");
+    xml2.push_str("<data><timestamp>3</timestamp></data>");
+    xml2.push_str("</repomd>");
+    ts = xml::get_timestamp(xml2.clone());
+    assert_eq!(9, ts);
+}
