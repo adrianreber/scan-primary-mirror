@@ -25,7 +25,15 @@ pub fn get_timestamp(xml: String) -> i64 {
     let mut timestamp: i64 = -1;
 
     for d in project.data {
-        timestamp = cmp::max(timestamp, d.timestamp.value.parse::<i64>().unwrap());
+        let value = match d.timestamp.value.parse::<i64>() {
+            Ok(v1) => v1,
+            Err(_) => match d.timestamp.value.parse::<f64>() {
+                Ok(v2) => v2 as i64,
+                Err(_) => continue,
+            },
+        };
+
+        timestamp = cmp::max(timestamp, value);
     }
 
     timestamp
