@@ -517,9 +517,9 @@ fn find_repositories(p: &mut FindRepositories) -> Result<usize, Box<dyn Error>> 
             }
             let parent = String::from(Path::new(&k).parent().unwrap().to_str().unwrap());
             // 'parent' should always be a key of cds
-            let cd = p.cds.get_mut(&parent).unwrap();
+            let cd = p.cds.get(&parent).unwrap();
             // No need to look at unchanged entries
-            if !cd.ctime_changed {
+            if !p.cds.get(&k).unwrap().ctime_changed {
                 continue;
             }
             let with_topdir = match parent.is_empty() {
