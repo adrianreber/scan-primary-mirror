@@ -447,6 +447,140 @@ fn cleanup_database(
     Ok(0)
 }
 
+#[derive(Debug)]
+struct DetailsResult {
+    md5_sum: String,
+    sha1_sum: String,
+    sha256_sum: String,
+    sha512_sum: String,
+    length: i64,
+    timestamp: i64,
+}
+
+fn get_details_via_http(
+    checksum_base: &Option<String>,
+    topdir: &str,
+    dir: &str,
+) -> Result<DetailsResult, Box<dyn Error>> {
+    let url = format!(
+        "{}{}{}/repomd.xml",
+        match checksum_base {
+            Some(c) => c,
+            _ => return Err(("For backend rsync 'checksum_base' needs to be set").into()),
+        },
+        topdir,
+        dir
+    );
+    let resp = match reqwest::blocking::get(&url) {
+        Ok(r) => r,
+        Err(e) => return Err(format!("Error '{}' retrieving '{}'", e, url).into()),
+    };
+    let content_length: i64 = match resp.headers().get("content-length") {
+        Some(r) => r.to_str()?.parse::<i64>()?,
+        _ => 0,
+    };
+    let body = resp.text()?;
+
+    use md5::{Digest, Md5};
+    use sha1::Sha1;
+    use sha2::{Sha256, Sha512};
+
+    let mut md5 = Md5::new();
+    md5.update(&body);
+    let mut sha1 = Sha1::new();
+    sha1.update(&body);
+    let mut sha256 = Sha256::new();
+    sha256.update(&body);
+    let mut sha512 = Sha512::new();
+    sha512.update(&body);
+
+    return Ok(DetailsResult {
+        md5_sum: format!("{:x}", md5.finalize()),
+        sha1_sum: format!("{:x}", sha1.finalize()),
+        sha256_sum: format!("{:x}", sha256.finalize()),
+        sha512_sum: format!("{:x}", sha512.finalize()),
+        length: content_length,
+        timestamp: xml::get_timestamp(body),
+    });
+}
+
+fn fill_ifds(
+    ifds: &mut Vec<db::models::InsertFileDetail>,
+    backend: &str,
+    checksum_base: &Option<String>,
+    topdir: &str,
+    dir: &str,
+    d_id: i32,
+    fds: &[db::models::FileDetail],
+) -> Result<(), Box<dyn Error>> {
+    let dr = match backend {
+        "rsync" => get_details_via_http(checksum_base, topdir, dir)?,
+        _ => return Err(("Unsupported scan backend '{}'").into()),
+    };
+    let target = String::from("repomd.xml");
+    let mut found_in_db = false;
+
+    // find repomd.xml in file_details
+    for fd in fds {
+        let timestamp_db = match fd.timestamp {
+            Some(t) => t,
+            _ => 0,
+        };
+
+        let size_db = match fd.size {
+            Some(s) => s,
+            _ => 0,
+        };
+
+        let sha1_db = match &fd.sha1 {
+            Some(s) => String::from(s),
+            _ => String::from(""),
+        };
+
+        let md5_db = match &fd.md5 {
+            Some(s) => String::from(s),
+            _ => String::from(""),
+        };
+
+        let sha256_db = match &fd.sha256 {
+            Some(s) => String::from(s),
+            _ => String::from(""),
+        };
+
+        let sha512_db = match &fd.sha512 {
+            Some(s) => String::from(s),
+            _ => String::from(""),
+        };
+
+        if fd.directory_id == d_id
+            && fd.filename == target
+            && size_db == dr.length
+            && timestamp_db == dr.timestamp
+            && sha1_db == dr.sha1_sum
+            && md5_db == dr.md5_sum
+            && sha256_db == dr.sha256_sum
+            && sha512_db == dr.sha512_sum
+        {
+            found_in_db = true;
+        }
+    }
+
+    if !found_in_db {
+        ifds.push(db::models::InsertFileDetail {
+            directory_id: d_id,
+            filename: target,
+            timestamp: Some(dr.timestamp),
+            size: Some(dr.length),
+            sha1: Some(dr.sha1_sum),
+            md5: Some(dr.md5_sum),
+            sha256: Some(dr.sha256_sum),
+            sha512: Some(dr.sha512_sum),
+        });
+    }
+
+    Ok(())
+}
+
 /// Parameter for the `find_repositories()` function.
 struct FindRepositories<'a> {
     /// The connection to the database
@@ -480,6 +614,8 @@ struct FindRepositories<'a> {
     /// If one of the following strings is part of the path
     /// a newly created version will be set to display = false
     do_not_display_paths: &'a [String],
+    /// Which backend is used to scan the primary mirror
+    backend: String,
 }
 
 /// Find repositories in the list of scanned directories.
@@ -487,21 +623,11 @@ struct FindRepositories<'a> {
 /// Based on the input structure `FindRepositories` this
 /// function will create new repository objects in the database.
 fn find_repositories(p: &mut FindRepositories) -> Result<usize, Box<dyn Error>> {
-    use db::schema::file_detail;
-    #[derive(Insertable, Debug)]
-    #[table_name = "file_detail"]
-    struct InsertFileDetail {
-        directory_id: i32,
-        filename: String,
-        timestamp: Option<i64>,
-        size: Option<i64>,
-        sha1: Option<String>,
-        md5: Option<String>,
-        sha256: Option<String>,
-        sha512: Option<String>,
+    if p.backend != "rsync" {
+        return Err(format!("Cannot handle backend type {}", p.backend).into());
     }
 
-    let mut ifds: Vec<InsertFileDetail> = Vec::new();
+    let mut ifds: Vec<db::models::InsertFileDetail> = Vec::new();
 
     let arches = db::functions::get_arches(p.c)?;
     let mut versions = db::functions::get_versions(p.c)?;
@@ -563,104 +689,16 @@ fn find_repositories(p: &mut FindRepositories) -> Result<usize, Box<dyn Error>> 
                     prefix,
                 )?;
             }
-            // TODO: Only for rsync
-            let resp = reqwest::blocking::get(format!(
-                "{}{}{}/repomd.xml",
-                p.checksum_base.clone().unwrap(),
-                p.top,
-                k
-            ))
-            .unwrap();
-            let content_length = resp
-                .headers()
-                .get("content-length")
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .parse::<i64>()
-                .unwrap();
-            let body = resp.text().unwrap();
-            let timestamp_xml = xml::get_timestamp(body.clone());
 
-            use md5::{Digest, Md5};
-            let mut md5 = Md5::new();
-            md5.update(&body);
-            let md5_sum = format!("{}", hex_fmt::HexFmt(md5.finalize()));
-            use sha1::Sha1;
-            let mut sha1 = Sha1::new();
-            sha1.update(&body);
-            let sha1_sum = format!("{}", hex_fmt::HexFmt(sha1.finalize()));
-            use sha2::{Sha256, Sha512};
-            let mut sha256 = Sha256::new();
-            sha256.update(&body);
-            let sha256_sum = format!("{}", hex_fmt::HexFmt(sha256.finalize()));
-            let mut sha512 = Sha512::new();
-            sha512.update(body);
-            let sha512_sum = format!("{}", hex_fmt::HexFmt(sha512.finalize()));
-
-            {
-                let target = String::from("repomd.xml");
-                let mut found_in_db = false;
-
-                // find repomd.xml in file_details
-                let d_id = p.cds[&k].directory_id;
-                for fd in &fds {
-                    let timestamp_db = match fd.timestamp {
-                        Some(t) => t,
-                        _ => 0,
-                    };
-
-                    let size_db = match fd.size {
-                        Some(s) => s,
-                        _ => 0,
-                    };
-
-                    let sha1_db = match &fd.sha1 {
-                        Some(s) => String::from(s),
-                        _ => String::from(""),
-                    };
-
-                    let md5_db = match &fd.md5 {
-                        Some(s) => String::from(s),
-                        _ => String::from(""),
-                    };
-
-                    let sha256_db = match &fd.sha256 {
-                        Some(s) => String::from(s),
-                        _ => String::from(""),
-                    };
-
-                    let sha512_db = match &fd.sha512 {
-                        Some(s) => String::from(s),
-                        _ => String::from(""),
-                    };
-
-                    if fd.directory_id == d_id
-                        && fd.filename == target
-                        && size_db == content_length
-                        && timestamp_db == timestamp_xml
-                        && sha1_db == sha1_sum
-                        && md5_db == md5_sum
-                        && sha256_db == sha256_sum
-                        && sha512_db == sha512_sum
-                    {
-                        found_in_db = true;
-                    }
-                }
-
-                if !found_in_db {
-                    ifds.push(InsertFileDetail {
-                        directory_id: d_id,
-                        filename: target.clone(),
-                        timestamp: Some(timestamp_xml),
-                        size: Some(content_length),
-                        sha1: Some(sha1_sum),
-                        md5: Some(md5_sum),
-                        sha256: Some(sha256_sum),
-                        sha512: Some(sha512_sum),
-                    });
-                }
-            }
+            fill_ifds(
+                &mut ifds,
+                &p.backend,
+                &p.checksum_base,
+                &p.top,
+                &k,
+                p.cds[&k].directory_id,
+                &fds,
+            )?;
         }
     }
 
@@ -1238,6 +1276,7 @@ fn main() {
         test_paths: &test_paths,
         skip_repository_paths: &skip_repository_paths,
         do_not_display_paths: &do_not_display_paths,
+        backend: config_file_category.r#type,
     };
     if let Err(e) = find_repositories(&mut find_parameter) {
         println!("Creating repositories in database failed {}", e);

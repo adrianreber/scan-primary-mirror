@@ -153,31 +153,17 @@ fn age_file_details_test() {
         }
     };
 
-    use db::schema::file_detail;
     assert!(!diesel::delete(db::schema::file_detail::dsl::file_detail)
         .execute(&c)
         .is_err());
-
-    #[derive(Insertable, Debug)]
-    #[table_name = "file_detail"]
-    struct InsertFileDetail {
-        directory_id: i32,
-        filename: String,
-        timestamp: Option<i64>,
-        size: Option<i64>,
-        sha1: Option<String>,
-        md5: Option<String>,
-        sha256: Option<String>,
-        sha512: Option<String>,
-    }
 
     let five = chrono::offset::Local::now().timestamp() - (60 * 60 * 24 * 5);
     let four = chrono::offset::Local::now().timestamp() - (60 * 60 * 24 * 4);
     let three = chrono::offset::Local::now().timestamp() - (60 * 60 * 24 * 3);
 
-    let mut ifds: Vec<InsertFileDetail> = Vec::new();
+    let mut ifds: Vec<db::models::InsertFileDetail> = Vec::new();
 
-    let fd_7_5 = InsertFileDetail {
+    let fd_7_5 = db::models::InsertFileDetail {
         directory_id: 7,
         filename: String::from("repomd.xml"),
         timestamp: Some(five),
@@ -187,7 +173,7 @@ fn age_file_details_test() {
         sha256: Some(String::from("sha256")),
         sha512: Some(String::from("sha512")),
     };
-    let fd_8_3 = InsertFileDetail {
+    let fd_8_3 = db::models::InsertFileDetail {
         directory_id: 8,
         filename: String::from("repomd.xml"),
         timestamp: Some(three),
@@ -197,7 +183,7 @@ fn age_file_details_test() {
         sha256: Some(String::from("sha256")),
         sha512: Some(String::from("sha512")),
     };
-    let fd_7_4 = InsertFileDetail {
+    let fd_7_4 = db::models::InsertFileDetail {
         directory_id: 7,
         filename: String::from("repomd.xml"),
         timestamp: Some(four),
@@ -207,7 +193,7 @@ fn age_file_details_test() {
         sha256: Some(String::from("sha256")),
         sha512: Some(String::from("sha512")),
     };
-    let fd_7_3 = InsertFileDetail {
+    let fd_7_3 = db::models::InsertFileDetail {
         directory_id: 7,
         filename: String::from("repomd.xml"),
         timestamp: Some(three),
@@ -631,4 +617,128 @@ fn get_timestamp_test() {
     xml2.push_str("</repomd>");
     ts = xml::get_timestamp(xml2.clone());
     assert_eq!(9, ts);
+}
+
+#[test]
+fn get_details_via_http_test() {
+    assert!(get_details_via_http(&None, "test", "").is_err());
+    println!(
+        "{:#?}",
+        get_details_via_http(&Some("http://www.example/".to_string()), "test", "")
+    );
+    assert!(get_details_via_http(&Some("http://www.example/".to_string()), "test", "").is_err());
+
+    let dr = match get_details_via_http(&Some("http://localhost:17397/".to_string()), "test", "") {
+        Ok(d) => d,
+        Err(e) => {
+            println!("Error {}", e);
+            assert!(false);
+            return;
+        }
+    };
+    assert_eq!(dr.md5_sum, "c3002eefddc963954306e38632dbeca4");
+    assert_eq!(dr.sha1_sum, "226c58402e3bc46d4e9f8bde740594430f4eea01");
+    assert_eq!(
+        dr.sha256_sum,
+        "fa079bc0df97e4479c950b64e1f34c74a9da393f80eba7218c56edf8931907ce"
+    );
+    assert_eq!(dr.sha512_sum, "bccb1871d3b5670fdc6967155bced4d4f9978f4428c19407733bfabbf7aecb6c9de566629fed5e0d41c3ab93c96562dfc49e5ebb6a8f8dffcbbc411b5d1d9d52");
+    assert_eq!(dr.length, 93);
+    assert_eq!(dr.timestamp, 7);
+}
+
+#[test]
+fn fill_ifds_test() {
+    let mut ifds: Vec<db::models::InsertFileDetail> = Vec::new();
+    let mut fds: Vec<db::models::FileDetail> = Vec::new();
+    if fill_ifds(
+        &mut ifds,
+        "never-supported",
+        &Some("http://localhost:17397/".to_string()),
+        "test",
+        "",
+        65,
+        &fds,
+    )
+    .is_ok()
+    {
+        panic!();
+    }
+    if fill_ifds(
+        &mut ifds,
+        "rsync",
+        &Some("http://localhost:17397/".to_string()),
+        "test",
+        "",
+        65,
+        &fds,
+    )
+    .is_err()
+    {
+        panic!();
+    }
+
+    assert_eq!(ifds.len(), 1);
+    assert_eq!(ifds[0].directory_id, 65);
+    assert_eq!(ifds[0].filename, "repomd.xml".to_string());
+    assert_eq!(ifds[0].timestamp, Some(7));
+    assert_eq!(ifds[0].size, Some(93));
+    assert_eq!(
+        ifds[0].sha1,
+        Some("226c58402e3bc46d4e9f8bde740594430f4eea01".to_string())
+    );
+    assert_eq!(
+        ifds[0].md5,
+        Some("c3002eefddc963954306e38632dbeca4".to_string())
+    );
+    assert_eq!(
+        ifds[0].sha256,
+        Some("fa079bc0df97e4479c950b64e1f34c74a9da393f80eba7218c56edf8931907ce".to_string())
+    );
+    assert_eq!(ifds[0].sha512, Some("bccb1871d3b5670fdc6967155bced4d4f9978f4428c19407733bfabbf7aecb6c9de566629fed5e0d41c3ab93c96562dfc49e5ebb6a8f8dffcbbc411b5d1d9d52".to_string()));
+
+    ifds = Vec::new();
+    fds = vec![ db::models::FileDetail {
+        id: 39,
+        directory_id: 65,
+        filename: "repomd.xml".to_string(),
+        timestamp: Some(7),
+        size: Some(93),
+        sha1: Some("226c58402e3bc46d4e9f8bde740594430f4eea01".to_string()),
+        md5: Some("c3002eefddc963954306e38632dbeca4".to_string()),
+        sha256: Some("fa079bc0df97e4479c950b64e1f34c74a9da393f80eba7218c56edf8931907ce".to_string()),
+        sha512: Some("bccb1871d3b5670fdc6967155bced4d4f9978f4428c19407733bfabbf7aecb6c9de566629fed5e0d41c3ab93c96562dfc49e5ebb6a8f8dffcbbc411b5d1d9d52".to_string()),
+    } ];
+    if fill_ifds(
+        &mut ifds,
+        "rsync",
+        &Some("http://localhost:17397/".to_string()),
+        "test",
+        "",
+        65,
+        &fds,
+    )
+    .is_err()
+    {
+        panic!();
+    }
+
+    assert_eq!(ifds.len(), 0);
+
+    fds[0].timestamp = Some(6);
+    if fill_ifds(
+        &mut ifds,
+        "rsync",
+        &Some("http://localhost:17397/".to_string()),
+        "test",
+        "",
+        65,
+        &fds,
+    )
+    .is_err()
+    {
+        panic!();
+    }
+
+    assert_eq!(ifds.len(), 1);
 }

@@ -1,4 +1,6 @@
-use crate::db::schema::{category, category_directory, directory, repository, version};
+use crate::db::schema::{
+    category, category_directory, directory, file_detail, repository, version,
+};
 
 #[derive(Queryable, Identifiable, Associations)]
 #[belongs_to(Directory, foreign_key = "topdir_id")]
@@ -72,6 +74,19 @@ pub struct Repository {
 #[derive(Queryable, Debug, Clone, PartialEq)]
 pub struct FileDetail {
     pub id: i32,
+    pub directory_id: i32,
+    pub filename: String,
+    pub timestamp: Option<i64>,
+    pub size: Option<i64>,
+    pub sha1: Option<String>,
+    pub md5: Option<String>,
+    pub sha256: Option<String>,
+    pub sha512: Option<String>,
+}
+
+#[derive(Insertable, Debug)]
+#[table_name = "file_detail"]
+pub struct InsertFileDetail {
     pub directory_id: i32,
     pub filename: String,
     pub timestamp: Option<i64>,
