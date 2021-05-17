@@ -450,12 +450,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hex_fmt"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b07f60793ff0a4d9cef0f18e63b5357e06209987153a64648c972c1e5aff336f"
-
-[[package]]
 name = "http"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1041,7 +1035,6 @@ dependencies = [
  "diesel",
  "dotenv",
  "getopts",
- "hex_fmt",
  "md-5",
  "prettytable-rs",
  "regex",
