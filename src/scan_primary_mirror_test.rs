@@ -148,8 +148,7 @@ fn age_file_details_test() {
         Ok(c) => c,
         Err(e) => {
             println!("Database connection failed {}", e);
-            assert!(false);
-            return;
+            panic!();
         }
     };
 
@@ -214,14 +213,14 @@ fn age_file_details_test() {
         .execute(&c)
     {
         println!("Database insert failed {}", e);
-        assert!(false);
+        panic!();
     }
 
     let mut fds = db::functions::get_file_details(&c);
     let fds_org = db::functions::get_file_details(&c);
     if let Err(e) = age_file_details(&c, &mut fds, 6, 5) {
         println!("Running age_file_details() failed {}", e);
-        assert!(false);
+        panic!();
     }
     assert!(fds_org
         .iter()
@@ -230,14 +229,14 @@ fn age_file_details_test() {
     fds = db::functions::get_file_details(&c);
     if let Err(e) = age_file_details(&c, &mut fds, 4, 3) {
         println!("Running age_file_details() failed {}", e);
-        assert!(false);
+        panic!();
     }
     assert_eq!(3, db::functions::get_file_details(&c).len());
 
     fds = db::functions::get_file_details(&c);
     if let Err(e) = age_file_details(&c, &mut fds, 1, 0) {
         println!("Running age_file_details() failed {}", e);
-        assert!(false);
+        panic!();
     }
     assert_eq!(2, db::functions::get_file_details(&c).len());
 }
@@ -248,8 +247,7 @@ fn sync_category_directories_test() {
         Ok(c) => c,
         Err(e) => {
             println!("Database connection failed {}", e);
-            assert!(false);
-            return;
+            panic!();
         }
     };
 
@@ -350,8 +348,7 @@ fn guess_ver_arch_from_path_test() {
         Ok(c) => c,
         Err(e) => {
             println!("Database connection failed {}", e);
-            assert!(false);
-            return;
+            panic!();
         }
     };
 
@@ -378,7 +375,7 @@ fn guess_ver_arch_from_path_test() {
         &test_paths,
         &do_not_display_paths,
     ) {
-        Ok(_) => assert!(false),
+        Ok(_) => panic!(),
         Err(e) => assert_eq!(format!("{}", e), "Not able to figure out architecture"),
     };
 
@@ -394,8 +391,7 @@ fn guess_ver_arch_from_path_test() {
         Ok(r) => r,
         Err(e) => {
             println!("{}", e);
-            assert!(false);
-            ("".to_string(), -1, -1)
+            panic!();
         }
     };
 
@@ -414,8 +410,7 @@ fn guess_ver_arch_from_path_test() {
         Ok(r) => r,
         Err(e) => {
             println!("{}", e);
-            assert!(false);
-            ("".to_string(), -1, -1)
+            panic!();
         }
     };
 
@@ -425,8 +420,7 @@ fn guess_ver_arch_from_path_test() {
         Ok(v) => v,
         Err(e) => {
             println!("{}", e);
-            assert!(false);
-            Vec::new()
+            panic!();
         }
     };
     assert_eq!(1, versions.len());
@@ -453,8 +447,7 @@ fn guess_ver_arch_from_path_test() {
         Ok(r) => r,
         Err(e) => {
             println!("{}", e);
-            assert!(false);
-            ("".to_string(), -1, -1)
+            panic!();
         }
     };
 
@@ -465,8 +458,7 @@ fn guess_ver_arch_from_path_test() {
         Ok(v) => v,
         Err(e) => {
             println!("{}", e);
-            assert!(false);
-            Vec::new()
+            panic!();
         }
     };
     assert_eq!(1, insert_versions.len());
@@ -495,8 +487,7 @@ fn guess_ver_arch_from_path_test() {
         Ok(r) => r,
         Err(e) => {
             println!("{}", e);
-            assert!(false);
-            ("".to_string(), -1, -1)
+            panic!();
         }
     };
 
@@ -507,8 +498,7 @@ fn guess_ver_arch_from_path_test() {
         Ok(v) => v,
         Err(e) => {
             println!("{}", e);
-            assert!(false);
-            Vec::new()
+            panic!();
         }
     };
     assert_eq!(1, insert_versions.len());
@@ -524,8 +514,7 @@ fn guess_ver_arch_from_path_test_with_rawhide() {
         Ok(c) => c,
         Err(e) => {
             println!("Database connection failed {}", e);
-            assert!(false);
-            return;
+            panic!();
         }
     };
 
@@ -560,8 +549,7 @@ fn guess_ver_arch_from_path_test_with_rawhide() {
         Ok(r) => r,
         Err(e) => {
             println!("{}", e);
-            assert!(false);
-            ("".to_string(), -1, -1)
+            panic!();
         }
     };
 
@@ -606,16 +594,15 @@ fn get_timestamp_test() {
     xml2 = xml1.clone();
     xml2.push_str("<data><timestamp>7.9</timestamp></data>");
     xml2.push_str("</repomd>");
-    ts = xml::get_timestamp(xml2.clone());
+    ts = xml::get_timestamp(xml2);
     assert_eq!(7, ts);
 
-    xml2 = xml1.clone();
-    xml2.push_str("<data><timestamp>7.9</timestamp></data>");
-    xml2.push_str("<data><timestamp>9</timestamp></data>");
-    xml2.push_str("<data><timestamp>-1</timestamp></data>");
-    xml2.push_str("<data><timestamp>3</timestamp></data>");
-    xml2.push_str("</repomd>");
-    ts = xml::get_timestamp(xml2.clone());
+    xml1.push_str("<data><timestamp>7.9</timestamp></data>");
+    xml1.push_str("<data><timestamp>9</timestamp></data>");
+    xml1.push_str("<data><timestamp>-1</timestamp></data>");
+    xml1.push_str("<data><timestamp>3</timestamp></data>");
+    xml1.push_str("</repomd>");
+    ts = xml::get_timestamp(xml1);
     assert_eq!(9, ts);
 }
 
@@ -632,8 +619,7 @@ fn get_details_via_http_test() {
         Ok(d) => d,
         Err(e) => {
             println!("Error {}", e);
-            assert!(false);
-            return;
+            panic!();
         }
     };
     assert_eq!(dr.md5_sum, "c3002eefddc963954306e38632dbeca4");
