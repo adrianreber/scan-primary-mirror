@@ -52,82 +52,126 @@ url="rsync://lisas.de/rpmfusion/nonfree/fedora-secondary/"
 options="--exclude=nothing --port=873"
 checksum_base="https://ftp-stud.hs-esslingen.de/pub/Mirrors/rpmfusion.org/"
 
+[[category]]
+name="RPMFUSION nonfree EL Archive"
+type="rsync"
+url="rsync://mirror1.hs-esslingen.de/archive.rpmfusion.org/free-archive/el/"
+checksum_base="https://mirror1.hs-esslingen.de/pub/Mirrors/archive.rpmfusion.org/"
+
+[[category]]
+name="RPMFUSION free EL Archive"
+type="rsync"
+url="rsync://mirror1.hs-esslingen.de/archive.rpmfusion.org/nonfree-archive/el/"
+checksum_base="https://mirror1.hs-esslingen.de/pub/Mirrors/archive.rpmfusion.org/"
+
+[[category]]
+name="RPMFUSION free Fedora Archive"
+type="rsync"
+url="rsync://mirror1.hs-esslingen.de/archive.rpmfusion.org/free-archive/fedora/"
+checksum_base="https://mirror1.hs-esslingen.de/pub/Mirrors/archive.rpmfusion.org/"
+
+[[category]]
+name="RPMFUSION nonfree Fedora Archive"
+type="rsync"
+url="rsync://mirror1.hs-esslingen.de/archive.rpmfusion.org/nonfree-archive/fedora/"
+checksum_base="https://mirror1.hs-esslingen.de/pub/Mirrors/archive.rpmfusion.org/"
+
+[[category]]
+name="RPMFUSION free Fedora Secondary Archive"
+type="rsync"
+url="rsync://mirror1.hs-esslingen.de/archive.rpmfusion.org/free-archive/fedora-secondary/"
+checksum_base="https://mirror1.hs-esslingen.de/pub/Mirrors/archive.rpmfusion.org/"
+
+[[category]]
+name="RPMFUSION nonfree Fedora Secondary Archive"
+type="rsync"
+url="rsync://mirror1.hs-esslingen.de/archive.rpmfusion.org/nonfree-archive/fedora-secondary/"
+checksum_base="https://mirror1.hs-esslingen.de/pub/Mirrors/archive.rpmfusion.org/"
+
 [[repository_mapping]]
-regex="^nonfree/fedora(-secondary)?/updates/[\\.\\d]+/.*"
+regex="^nonfree(-archive)?/fedora(-secondary)?/updates/[\\.\\d]+/.*"
 prefix="nonfree-fedora-updates-released"
 
 [[repository_mapping]]
-regex="^nonfree/fedora(-secondary)?/updates/testing/[\\.\\d]+/.*"
+regex="^nonfree(-archive)?/fedora(-secondary)?/updates/testing/[\\.\\d]+/.*"
 prefix="nonfree-fedora-updates-testing"
 
 [[repository_mapping]]
-regex="^free/fedora(-secondary)?/updates/[\\.\\d]+/.*"
+regex="^free(-archive)?/fedora(-secondary)?/updates/[\\.\\d]+/.*"
 prefix="free-fedora-updates-released"
 
 [[repository_mapping]]
-regex="^free/fedora(-secondary)?/updates/testing/[\\.\\d]+/.*"
+regex="^free(-archive)?/fedora(-secondary)?/updates/testing/[\\.\\d]+/.*"
 prefix="free-fedora-updates-testing"
 
 [[repository_mapping]]
-regex="^free/fedora/tainted/[\\.\\d]+/.*"
+regex="^free(-archive)?/fedora/tainted/[\\.\\d]+/.*"
 prefix="free-fedora-tainted"
 
 [[repository_mapping]]
-regex="^nonfree/fedora/tainted/[\\.\\d]+/.*"
+regex="^nonfree(-archive)?/fedora/tainted/[\\.\\d]+/.*"
 prefix="nonfree-fedora-tainted"
 
 [[repository_mapping]]
-regex="^nonfree/fedora/steam/[\\.\\d]+/.*"
+regex="^nonfree(-archive)?/fedora/steam/[\\.\\d]+/.*"
 prefix="nonfree-fedora-steam"
 
 [[repository_mapping]]
-regex="^free/fedora/rpi/[\\.\\d]+/.*"
+regex="^free(-archive)?/fedora/rpi/[\\.\\d]+/.*"
 prefix="free-fedora-rpi"
 
 [[repository_mapping]]
-regex="^nonfree/fedora/nvidia-driver/[\\.\\d]+/.*"
+regex="^nonfree(-archive)?/fedora/nvidia-driver/[\\.\\d]+/.*"
 prefix="nonfree-fedora-nvidia-driver"
 
 [[repository_mapping]]
-regex="^free/el/rpi/[\\.\\d]+/.*"
+regex="^free(-archive)?/fedora/drivers/[\\.\\d]+/.*"
+prefix="free-fedora-drivers"
+
+[[repository_mapping]]
+regex="nonfree(-archive)?/fedora/drivers/[\\.\\d]+/.*"
+prefix="nonfree-fedora-drivers"
+
+[[repository_mapping]]
+regex="^free(-archive)?/el/rpi/[\\.\\d]+/.*"
 prefix="free-el-rpi"
 
 [[repository_mapping]]
-regex="^free/el/tainted/[\\.\\d]+/.*"
+regex="^free(-archive)?/el/tainted/[\\.\\d]+/.*"
 prefix="free-el-tainted"
 
 [[repository_mapping]]
-regex="^nonfree/el/tainted/[\\.\\d]+/.*"
+regex="^nonfree(-archive)?/el/tainted/[\\.\\d]+/.*"
 prefix="nonfree-el-tainted"
 
 [[repository_mapping]]
-regex="^free/el/updates/[\\.\\d]+/.*"
+regex="^free(-archive)?/el/updates/[\\.\\d]+/.*"
 prefix="free-el-updates-released"
 
 [[repository_mapping]]
-regex="^free/el/updates/testing/[\\.\\d]+/.*"
+regex="^free(-archive)?/el/updates/testing/[\\.\\d]+/.*"
 prefix="free-el-updates-testing"
 
 [[repository_mapping]]
-regex="^free/el/releases/[\\.\\d]+/.*"
+regex="^free(-archive)?/el/releases/[\\.\\d]+/.*"
 prefix="free-el"
 
 [[repository_mapping]]
-regex="^nonfree/el/updates/[\\.\\d]+/.*"
+regex="^nonfree(-archive)?/el/updates/[\\.\\d]+/.*"
 prefix="nonfree-el-updates-released"
 
 [[repository_mapping]]
-regex="^nonfree/el/updates/testing/[\\.\\d]+/.*"
+regex="^nonfree(-archive)?/el/updates/testing/[\\.\\d]+/.*"
 prefix="nonfree-el-updates-testing"
 
 [[repository_mapping]]
-regex="^nonfree/el/releases/[\\.\\d]+/.*"
+regex="^nonfree(-archive)?/el/releases/[\\.\\d]+/.*"
 prefix="nonfree-el"
 
 [[repository_mapping]]
-regex="^free/fedora(-secondary)?/(releases|development)/(rawhide|[\\.\\d]+)/.*"
+regex="^free(-archive)?/fedora(-secondary)?/(releases|development)/(rawhide|[\\.\\d]+)/.*"
 prefix="free-fedora"
 
 [[repository_mapping]]
-regex="^nonfree/fedora(-secondary)?/(releases|development)/(rawhide|[\\.\\d]+)/.*"
+regex="^nonfree(-archive)?/fedora(-secondary)?/(releases|development)/(rawhide|[\\.\\d]+)/.*"
 prefix="nonfree-fedora"
