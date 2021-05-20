@@ -12,8 +12,8 @@ url="postgresql://localhost/mmtest"
 
 [[category]]
 name="RPMFUSION nonfree EL"
-type="rsync"
-url="rsync://download1.rpmfusion.org/rpmfusion/nonfree/el/"
+type="directory"
+url="/home/adrian/rpmfusion/nonfree/el/"
 checksum_base="https://download1.rpmfusion.org/"
 
 [[category]]

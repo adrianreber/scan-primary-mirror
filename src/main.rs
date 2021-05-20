@@ -35,14 +35,17 @@ use getopts::Options;
 use chrono::prelude::*;
 
 use serde::{Deserialize, Serialize};
+use std::time::SystemTime;
+
+use walkdir::{DirEntry, WalkDir};
 
 #[derive(Debug)]
 struct FileInfo {
-    mode: String,
-    size: String,
-    date: String,
-    time: String,
-    name: String,
+    is_directory: bool,
+    is_readable: bool,
+    size: i64,
+    timestamp: i64,
+    name: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -457,6 +460,50 @@ struct DetailsResult {
     timestamp: i64,
 }
 
+fn get_details_via_fs(
+    local_prefix: &Option<String>,
+    topdir: &str,
+    dir: &str,
+) -> Result<DetailsResult, Box<dyn Error>> {
+    use std::fs;
+
+    let repomd = format!(
+        "{}{}{}/repomd.xml",
+        match local_prefix {
+            Some(c) => c,
+            _ => return Err(("For backend 'directory' 'local_prefix' needs to be set").into()),
+        },
+        topdir,
+        dir
+    );
+
+    let body = fs::read_to_string(&repomd)?;
+
+    let content_length: i64 = fs::metadata(repomd)?.len() as i64;
+
+    use md5::{Digest, Md5};
+    use sha1::Sha1;
+    use sha2::{Sha256, Sha512};
+
+    let mut md5 = Md5::new();
+    md5.update(&body);
+    let mut sha1 = Sha1::new();
+    sha1.update(&body);
+    let mut sha256 = Sha256::new();
+    sha256.update(&body);
+    let mut sha512 = Sha512::new();
+    sha512.update(&body);
+
+    return Ok(DetailsResult {
+        md5_sum: format!("{:x}", md5.finalize()),
+        sha1_sum: format!("{:x}", sha1.finalize()),
+        sha256_sum: format!("{:x}", sha256.finalize()),
+        sha512_sum: format!("{:x}", sha512.finalize()),
+        length: content_length,
+        timestamp: xml::get_timestamp(body),
+    });
+}
+
 fn get_details_via_http(
     checksum_base: &Option<String>,
     topdir: &str,
@@ -466,7 +513,7 @@ fn get_details_via_http(
         "{}{}{}/repomd.xml",
         match checksum_base {
             Some(c) => c,
-            _ => return Err(("For backend rsync 'checksum_base' needs to be set").into()),
+            _ => return Err(("For backend 'rsync' 'checksum_base' needs to be set").into()),
         },
         topdir,
         dir
@@ -504,24 +551,36 @@ fn get_details_via_http(
     });
 }
 
-fn fill_ifds(
-    ifds: &mut Vec<db::models::InsertFileDetail>,
-    backend: &str,
-    checksum_base: &Option<String>,
-    topdir: &str,
-    dir: &str,
+/// Parameter for the `fill_ifds()` funcion
+struct FillIfds<'a> {
+    /// InsertFileDetail return vector
+    ifds: &'a mut Vec<db::models::InsertFileDetail>,
+    /// Which backend this is using
+    backend: &'a str,
+    /// The base for creating checksums. For rsync a http URL
+    /// For file a directory path
+    checksum_base: &'a Option<String>,
+    /// topdir as defined by the category
+    topdir: &'a str,
+    /// The current directory this is about
+    dir: &'a str,
+    /// The directory for newly created entries
     d_id: i32,
-    fds: &[db::models::FileDetail],
-) -> Result<(), Box<dyn Error>> {
-    let dr = match backend {
-        "rsync" => get_details_via_http(checksum_base, topdir, dir)?,
+    /// The currently in the database existing entries
+    fds: &'a [db::models::FileDetail],
+}
+
+fn fill_ifds(p: &mut FillIfds) -> Result<(), Box<dyn Error>> {
+    let dr = match p.backend {
+        "rsync" => get_details_via_http(p.checksum_base, p.topdir, p.dir)?,
+        "directory" => get_details_via_fs(p.checksum_base, p.topdir, p.dir)?,
         _ => return Err(("Unsupported scan backend '{}'").into()),
     };
     let target = String::from("repomd.xml");
     let mut found_in_db = false;
 
     // find repomd.xml in file_details
-    for fd in fds {
+    for fd in p.fds {
         let timestamp_db = match fd.timestamp {
             Some(t) => t,
             _ => 0,
@@ -552,7 +611,7 @@ fn fill_ifds(
             _ => String::from(""),
         };
 
-        if fd.directory_id == d_id
+        if fd.directory_id == p.d_id
             && fd.filename == target
             && size_db == dr.length
             && timestamp_db == dr.timestamp
@@ -566,8 +625,8 @@ fn fill_ifds(
     }
 
     if !found_in_db {
-        ifds.push(db::models::InsertFileDetail {
-            directory_id: d_id,
+        p.ifds.push(db::models::InsertFileDetail {
+            directory_id: p.d_id,
             filename: target,
             timestamp: Some(dr.timestamp),
             size: Some(dr.length),
@@ -589,6 +648,8 @@ struct FindRepositories<'a> {
     cds: &'a mut HashMap<String, CategoryDirectory>,
     /// For rsync based scans a HTTP(S) URL where files can
     /// be downloaded from for checksum creation.
+    /// For file based scans the path on the local file system
+    /// which contains all the files.
     checksum_base: Option<String>,
     top: String,
     /// The category all these files belong to
@@ -623,7 +684,7 @@ struct FindRepositories<'a> {
 /// Based on the input structure `FindRepositories` this
 /// function will create new repository objects in the database.
 fn find_repositories(p: &mut FindRepositories) -> Result<usize, Box<dyn Error>> {
-    if p.backend != "rsync" {
+    if p.backend != "rsync" && p.backend != "directory" {
         return Err(format!("Cannot handle backend type {}", p.backend).into());
     }
 
@@ -690,15 +751,15 @@ fn find_repositories(p: &mut FindRepositories) -> Result<usize, Box<dyn Error>> 
                 )?;
             }
 
-            fill_ifds(
-                &mut ifds,
-                &p.backend,
-                &p.checksum_base,
-                &p.top,
-                &k,
-                p.cds[&k].directory_id,
-                &fds,
-            )?;
+            fill_ifds(&mut FillIfds {
+                ifds: &mut ifds,
+                backend: &p.backend,
+                checksum_base: &p.checksum_base,
+                topdir: &p.top,
+                dir: &k,
+                d_id: p.cds[&k].directory_id,
+                fds: &fds,
+            })?;
         }
     }
 
@@ -744,16 +805,21 @@ fn add_entry_to_category_directories(
     excludes: &[String],
     topdir: &str,
 ) {
-    let base = basename(String::from(&fi.name));
-    let dir = match Path::new(&fi.name).parent() {
+    let name = match fi.name {
+        Some(n) => n,
+        _ => return,
+    };
+
+    let base = basename(String::from(&name));
+    let dir = match Path::new(&name).parent() {
         Some(parent) => match parent.to_str() {
-            Some(p) => match fi.mode.starts_with('d') {
+            Some(p) => match fi.is_directory {
                 true if base == "." => String::from(""),
-                true => fi.name,
+                true => name,
                 _ => String::from(p),
             },
             _ => {
-                println!("Failed getting parent path for {}", &fi.name);
+                println!("Failed getting parent path for {}", &name);
                 return;
             }
         },
@@ -777,8 +843,8 @@ fn add_entry_to_category_directories(
         }
     };
 
-    if fi.mode.starts_with('d') {
-        cd.ctime = ctime_from_rsync(fi.date, fi.time);
+    if fi.is_directory {
+        cd.ctime = fi.timestamp;
 
         let mut parent_unreadable = false;
 
@@ -790,8 +856,7 @@ fn add_entry_to_category_directories(
             }
         }
 
-        let pattern = Regex::new(r"^d......r.x").unwrap();
-        if !pattern.is_match(&fi.mode) || parent_unreadable {
+        if !fi.is_readable || parent_unreadable {
             cd.readable = false;
             if !ud.iter().any(|i| i == &dir) {
                 ud.push(dir);
@@ -802,8 +867,8 @@ fn add_entry_to_category_directories(
     } else {
         let file = File {
             name: base,
-            size: fi.size.parse().unwrap(),
-            timestamp: ctime_from_rsync(fi.date, fi.time),
+            size: fi.size,
+            timestamp: fi.timestamp,
         };
         cd.files.push(file);
     }
@@ -1039,6 +1104,105 @@ fn sync_category_directories(
     Ok(())
 }
 
+fn is_not_hidden(entry: &DirEntry) -> bool {
+    entry
+        .file_name()
+        .to_str()
+        .map(|s| entry.depth() == 0 || !s.starts_with('.'))
+        .unwrap_or(false)
+}
+
+fn scan_local_directory(
+    cds: &mut HashMap<String, CategoryDirectory>,
+    excludes: &[String],
+    topdir: &str,
+    url: &str,
+) -> Result<(), Box<dyn Error>> {
+    let mut ud: Vec<String> = Vec::new();
+
+    WalkDir::new(url)
+        .into_iter()
+        .filter_entry(|e| is_not_hidden(e))
+        .filter_map(|v| v.ok())
+        .map(|info| FileInfo {
+            is_directory: info.file_type().is_dir(),
+            is_readable: true,
+            size: info.metadata().unwrap().len() as i64,
+            timestamp: info
+                .metadata()
+                .unwrap()
+                .modified()
+                .unwrap()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64,
+            name: match info
+                .path()
+                .display()
+                .to_string()
+                .split(topdir)
+                .map(str::to_string)
+                .collect::<Vec<String>>()
+                .get(1)
+            {
+                Some(n) => Some(n.clone()),
+                _ => None,
+            },
+        })
+        .for_each(|x| {
+            add_entry_to_category_directories(x, cds, &mut ud, excludes, topdir);
+        });
+
+    Ok(())
+}
+
+fn scan_with_rsync(
+    cds: &mut HashMap<String, CategoryDirectory>,
+    excludes: &[String],
+    topdir: &str,
+    category_rsync_options: &[String],
+    rsync_options: &[String],
+    url: &str,
+) -> Result<(), Box<dyn Error>> {
+    debug::STEPS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    debug::print_step(format!(
+        "Running rsync -r --no-human-readable {:?} {:?} {}",
+        &rsync_options, &category_rsync_options, url
+    ));
+
+    let output = Command::new("rsync")
+        // We always need '-r' and '--no-human-readable'
+        .arg("-r")
+        .arg("--no-human-readable")
+        .args(rsync_options)
+        .args(category_rsync_options)
+        .arg(url)
+        .output();
+
+    let pattern = Regex::new(r"([drwSsx-]{10})\s*(.*) (.*) (.*) (.*)")?;
+
+    let mut ud: Vec<String> = Vec::new();
+
+    String::from_utf8(output?.stdout)?
+        .lines()
+        .filter_map(|line| pattern.captures(line))
+        .map(|info| FileInfo {
+            is_directory: info[1].starts_with('d'),
+            is_readable: Regex::new(r"^d......r.x").unwrap().is_match(&info[1]),
+            size: info[2].parse().unwrap(),
+            timestamp: ctime_from_rsync(info[3].to_string(), info[4].to_string()),
+            name: match info.get(5) {
+                Some(n) => Some(n.as_str().trim().to_string()),
+                _ => None,
+            },
+        })
+        .for_each(|x| {
+            add_entry_to_category_directories(x, cds, &mut ud, excludes, topdir);
+        });
+
+    Ok(())
+}
+
 fn print_usage(program: &str, opts: Options) {
     let brief = format!("Usage: {} [options]", program);
     print!("{}", opts.usage(&brief));
@@ -1156,23 +1320,13 @@ fn main() {
         process::exit(1);
     }
 
-    if config_file_category.r#type != "rsync" {
-        println!(
-            "Cannot handle type '{}' of category '{}'",
-            config_file_category.r#type, cat_name
-        );
-        process::exit(1);
-    }
-
-    let mut d = db::functions::get_directories(&connection);
-
-    let category_rsync_options: Vec<&str> = match &config_file_category.options {
-        Some(opt) => opt.split(' ').collect::<Vec<&str>>(),
+    let category_rsync_options: Vec<String> = match &config_file_category.options {
+        Some(opt) => opt.split(' ').map(str::to_string).collect::<Vec<String>>(),
         _ => vec![],
     };
 
-    let rsync_options: Vec<&str> = match &settings.common_rsync_options {
-        Some(ro) => ro.split(' ').collect::<Vec<&str>>(),
+    let rsync_options: Vec<String> = match &settings.common_rsync_options {
+        Some(ro) => ro.split(' ').map(str::to_string).collect::<Vec<String>>(),
         _ => vec![],
     };
 
@@ -1188,21 +1342,6 @@ fn main() {
 
     excludes.extend(category_excludes);
 
-    debug::print_step(format!(
-        "Running rsync -r --no-human-readable {:?} {:?} {}",
-        &rsync_options, &category_rsync_options, config_file_category.url
-    ));
-    let output = Command::new("rsync")
-        // We always need '-r' and '--no-human-readable'
-        .arg("-r")
-        .arg("--no-human-readable")
-        .args(&rsync_options)
-        .args(&category_rsync_options)
-        .arg(config_file_category.url)
-        .output();
-
-    let pattern = Regex::new(r"([drwSsx-]{10})\s*(.*) (.*) (.*) (.*)").unwrap();
-
     let mut cds: HashMap<String, CategoryDirectory> = HashMap::new();
 
     let topdir = match category.topdir.ends_with('/') {
@@ -1210,22 +1349,31 @@ fn main() {
         false => format!("{}/", category.topdir),
     };
 
-    let mut ud: Vec<String> = Vec::new();
+    if let Err(e) = match config_file_category.r#type.as_str() {
+        "rsync" => scan_with_rsync(
+            &mut cds,
+            &excludes,
+            &topdir,
+            &category_rsync_options,
+            &rsync_options,
+            &config_file_category.url,
+        ),
+        "directory" => {
+            scan_local_directory(&mut cds, &excludes, &topdir, &config_file_category.url)
+        }
+        _ => {
+            println!(
+                "Cannot handle type '{}' of category '{}'",
+                config_file_category.r#type, cat_name
+            );
+            process::exit(1);
+        }
+    } {
+        println!("Scanning {} failed with {}", &config_file_category.url, e);
+        process::exit(1);
+    }
 
-    String::from_utf8(output.unwrap().stdout)
-        .unwrap()
-        .lines()
-        .filter_map(|line| pattern.captures(line))
-        .map(|info| FileInfo {
-            mode: info[1].to_string(),
-            size: info[2].to_string(),
-            date: info[3].to_string(),
-            time: info[4].to_string(),
-            name: info[5].trim().to_string(),
-        })
-        .for_each(|x| {
-            add_entry_to_category_directories(x, &mut cds, &mut ud, &excludes, &topdir);
-        });
+    let mut d = db::functions::get_directories(&connection);
 
     if let Err(e) =
         sync_category_directories(&connection, topdir.clone(), category.id, &mut d, &mut cds)
@@ -1266,7 +1414,18 @@ fn main() {
     let mut find_parameter = FindRepositories {
         c: &connection,
         cds: &mut cds,
-        checksum_base: config_file_category.checksum_base,
+        checksum_base: match config_file_category.r#type.as_str() {
+            "rsync" => config_file_category.checksum_base,
+            "directory" => Some(
+                config_file_category
+                    .url
+                    .split(&topdir)
+                    .map(str::to_string)
+                    .collect::<Vec<String>>()[0]
+                    .clone(),
+            ),
+            _ => None,
+        },
         top: topdir.clone(),
         cat: &category,
         repos: &repositories,
