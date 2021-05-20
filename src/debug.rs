@@ -2,7 +2,7 @@ use console::style;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub static DEBUG: AtomicUsize = AtomicUsize::new(0);
-pub static STEPS: AtomicUsize = AtomicUsize::new(7);
+pub static STEPS: AtomicUsize = AtomicUsize::new(6);
 
 static CALL_COUNT: AtomicUsize = AtomicUsize::new(1);
 

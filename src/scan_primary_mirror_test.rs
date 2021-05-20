@@ -637,28 +637,29 @@ fn get_details_via_http_test() {
 fn fill_ifds_test() {
     let mut ifds: Vec<db::models::InsertFileDetail> = Vec::new();
     let mut fds: Vec<db::models::FileDetail> = Vec::new();
-    if fill_ifds(
-        &mut ifds,
-        "never-supported",
-        &Some("http://localhost:17397/".to_string()),
-        "test",
-        "",
-        65,
-        &fds,
-    )
+
+    if fill_ifds(&mut FillIfds {
+        ifds: &mut ifds,
+        backend: "never-supported",
+        checksum_base: &Some("http://localhost:17397/".to_string()),
+        topdir: "test",
+        dir: "",
+        d_id: 65,
+        fds: &fds,
+    })
     .is_ok()
     {
         panic!();
     }
-    if fill_ifds(
-        &mut ifds,
-        "rsync",
-        &Some("http://localhost:17397/".to_string()),
-        "test",
-        "",
-        65,
-        &fds,
-    )
+    if fill_ifds(&mut FillIfds {
+        ifds: &mut ifds,
+        backend: "rsync",
+        checksum_base: &Some("http://localhost:17397/".to_string()),
+        topdir: "test",
+        dir: "",
+        d_id: 65,
+        fds: &fds,
+    })
     .is_err()
     {
         panic!();
@@ -695,15 +696,15 @@ fn fill_ifds_test() {
         sha256: Some("fa079bc0df97e4479c950b64e1f34c74a9da393f80eba7218c56edf8931907ce".to_string()),
         sha512: Some("bccb1871d3b5670fdc6967155bced4d4f9978f4428c19407733bfabbf7aecb6c9de566629fed5e0d41c3ab93c96562dfc49e5ebb6a8f8dffcbbc411b5d1d9d52".to_string()),
     } ];
-    if fill_ifds(
-        &mut ifds,
-        "rsync",
-        &Some("http://localhost:17397/".to_string()),
-        "test",
-        "",
-        65,
-        &fds,
-    )
+    if fill_ifds(&mut FillIfds {
+        ifds: &mut ifds,
+        backend: "rsync",
+        checksum_base: &Some("http://localhost:17397/".to_string()),
+        topdir: "test",
+        dir: "",
+        d_id: 65,
+        fds: &fds,
+    })
     .is_err()
     {
         panic!();
@@ -712,15 +713,15 @@ fn fill_ifds_test() {
     assert_eq!(ifds.len(), 0);
 
     fds[0].timestamp = Some(6);
-    if fill_ifds(
-        &mut ifds,
-        "rsync",
-        &Some("http://localhost:17397/".to_string()),
-        "test",
-        "",
-        65,
-        &fds,
-    )
+    if fill_ifds(&mut FillIfds {
+        ifds: &mut ifds,
+        backend: "rsync",
+        checksum_base: &Some("http://localhost:17397/".to_string()),
+        topdir: "test",
+        dir: "",
+        d_id: 65,
+        fds: &fds,
+    })
     .is_err()
     {
         panic!();
