@@ -156,9 +156,9 @@ fn age_file_details_test() {
         .execute(&c)
         .is_err());
 
-    let five = chrono::offset::Local::now().timestamp() - (60 * 60 * 24 * 5);
-    let four = chrono::offset::Local::now().timestamp() - (60 * 60 * 24 * 4);
-    let three = chrono::offset::Local::now().timestamp() - (60 * 60 * 24 * 3);
+    let five = chrono::offset::Local::now().timestamp() - (60 * 60 * 24 * 5) + 1000;
+    let four = chrono::offset::Local::now().timestamp() - (60 * 60 * 24 * 4) + 1000;
+    let three = chrono::offset::Local::now().timestamp() - (60 * 60 * 24 * 3) + 1000;
 
     let mut ifds: Vec<db::models::InsertFileDetail> = Vec::new();
 
@@ -728,4 +728,53 @@ fn fill_ifds_test() {
     }
 
     assert_eq!(ifds.len(), 1);
+}
+
+#[test]
+fn scan_with_rsync_test() {
+    let mut cds: HashMap<String, CategoryDirectory> = HashMap::new();
+
+    if scan_with_rsync(&mut cds, &[], "topdir/", &[], &[], "/this/should/not/exist").is_err() {
+        panic!();
+    }
+    assert_eq!(cds.len(), 0);
+    if scan_with_rsync(&mut cds, &[], "topdir/", &[], &[], "test").is_err() {
+        panic!();
+    }
+    assert_eq!(cds.len(), 1);
+
+    let mut repomd_found = false;
+
+    for f in cds["test"].files.clone() {
+        if f.name == "repomd.xml" && f.size == 93 {
+            repomd_found = true;
+        }
+    }
+
+    assert!(repomd_found);
+}
+
+#[test]
+fn scan_local_directory_test() {
+    let mut cds: HashMap<String, CategoryDirectory> = HashMap::new();
+
+    if scan_local_directory(&mut cds, &[], "topdir/", "/this/should/not/exist").is_err() {
+        panic!();
+    }
+    assert_eq!(cds.len(), 0);
+    if scan_local_directory(&mut cds, &[], "es", "test").is_err() {
+        panic!();
+    }
+    println!("{:#?}", cds);
+    assert_eq!(cds.len(), 1);
+
+    let mut repomd_found = false;
+
+    for f in cds["t"].files.clone() {
+        if f.name == "repomd.xml" && f.size == 93 {
+            repomd_found = true;
+        }
+    }
+
+    assert!(repomd_found);
 }
