@@ -1118,6 +1118,8 @@ fn scan_local_directory(
     topdir: &str,
     url: &str,
 ) -> Result<(), Box<dyn Error>> {
+    use std::os::unix::fs::PermissionsExt;
+
     let mut ud: Vec<String> = Vec::new();
 
     WalkDir::new(url)
@@ -1126,7 +1128,7 @@ fn scan_local_directory(
         .filter_map(|v| v.ok())
         .map(|info| FileInfo {
             is_directory: info.file_type().is_dir(),
-            is_readable: true,
+            is_readable: (info.metadata().unwrap().permissions().mode() & 0o4) != 0,
             size: info.metadata().unwrap().len() as i64,
             timestamp: info
                 .metadata()
