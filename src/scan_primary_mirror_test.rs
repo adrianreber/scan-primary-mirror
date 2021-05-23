@@ -758,11 +758,11 @@ fn scan_with_rsync_test() {
 fn scan_local_directory_test() {
     let mut cds: HashMap<String, CategoryDirectory> = HashMap::new();
 
-    if scan_local_directory(&mut cds, &[], "topdir/", "/this/should/not/exist").is_err() {
+    if scan_local_directory(&mut cds, &[], "topdir/", "/this/should/not/exist", false).is_err() {
         panic!();
     }
     assert_eq!(cds.len(), 0);
-    if scan_local_directory(&mut cds, &[], "es", "test").is_err() {
+    if scan_local_directory(&mut cds, &[], "es", "test", false).is_err() {
         panic!();
     }
     println!("{:#?}", cds);
@@ -774,6 +774,65 @@ fn scan_local_directory_test() {
         if f.name == "repomd.xml" && f.size == 93 {
             repomd_found = true;
         }
+    }
+
+    assert!(repomd_found);
+
+    repomd_found = false;
+    cds = HashMap::new();
+    let mut sql_found = false;
+    let content = format!(
+        "some random line\n{}\t{}\t{}\t{}\n{}\t{}\t{}\t{}\n",
+        "1621350993",
+        "f",
+        "3330",
+        "test/database-setup.sql",
+        "1621350994",
+        "f",
+        "3334",
+        "test/repomd.xml",
+    );
+    use std::fs;
+    use std::fs::File;
+    use std::io::Write;
+    let mut f = File::create("test/fullfiletimelist-something").expect("Unable to create file");
+    f.write_all(content.as_bytes())
+        .expect("Unable to write data");
+
+    if scan_local_directory(&mut cds, &[], "es", "test", false).is_err() {
+        panic!();
+    }
+    for f in cds["test"].files.clone() {
+        if f.name == "repomd.xml" && f.size == 3334 && f.timestamp == 1621350994 {
+            repomd_found = true;
+        }
+    }
+
+    for f in cds["test"].files.clone() {
+        if f.name == "database-setup.sql" && f.size == 3330 && f.timestamp == 1621350993 {
+            sql_found = true;
+        }
+    }
+
+    assert!(repomd_found);
+    assert!(sql_found);
+
+    repomd_found = false;
+    cds = HashMap::new();
+
+    if scan_local_directory(&mut cds, &[], "es", "test", true).is_err() {
+        panic!();
+    }
+    assert_eq!(cds.len(), 1);
+
+    for f in cds["t"].files.clone() {
+        if f.name == "repomd.xml" && f.size == 93 {
+            repomd_found = true;
+        }
+    }
+
+    if fs::remove_file("test/fullfiletimelist-something").is_err() {
+        panic!();
     }
 
     assert!(repomd_found);
