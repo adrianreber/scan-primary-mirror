@@ -801,7 +801,6 @@ fn is_excluded(path: String, excludes: &[String]) -> bool {
 fn add_entry_to_category_directories(
     fi: FileInfo,
     cds: &mut HashMap<String, CategoryDirectory>,
-    ud: &mut Vec<String>,
     excludes: &[String],
     topdir: &str,
 ) {
@@ -845,25 +844,7 @@ fn add_entry_to_category_directories(
 
     if fi.is_directory {
         cd.ctime = fi.timestamp;
-
-        let mut parent_unreadable = false;
-
-        // check if parent is already unreadable
-        if dir != *"" {
-            let parent = String::from(Path::new(&dir).parent().unwrap().to_str().unwrap());
-            if ud.iter().any(|i| i == &parent) {
-                parent_unreadable = true;
-            }
-        }
-
-        if !fi.is_readable || parent_unreadable {
-            cd.readable = false;
-            if !ud.iter().any(|i| i == &dir) {
-                ud.push(dir);
-            }
-        } else {
-            cd.readable = true;
-        }
+        cd.readable = fi.is_readable;
     } else {
         let file = File {
             name: base,
@@ -1104,6 +1085,36 @@ fn sync_category_directories(
     Ok(())
 }
 
+fn handle_unreadable(cds: &mut HashMap<String, CategoryDirectory>) {
+    let mut cds_keys: Vec<String> = cds.keys().cloned().collect::<Vec<String>>();
+    cds_keys.sort();
+
+    let cds_copy = cds.clone();
+
+    for d in cds_keys {
+        let mut cd = match cds.get_mut(&d) {
+            Some(c) => c,
+            _ => continue,
+        };
+
+        let parent: String = match Path::new(&d).parent() {
+            Some(p) => match p.to_str() {
+                Some(pp) => pp.to_string(),
+                _ => continue,
+            },
+            _ => continue,
+        };
+
+        let parent_entry = match cds_copy.get(&parent) {
+            Some(p) => p,
+            _ => continue,
+        };
+        if !parent_entry.readable && cd.readable {
+            cd.readable = false;
+        }
+    }
+}
+
 fn is_not_hidden(entry: &DirEntry) -> bool {
     entry
         .file_name()
@@ -1117,16 +1128,49 @@ fn scan_local_directory(
     excludes: &[String],
     topdir: &str,
     url: &str,
+    skip_fftl: bool,
 ) -> Result<(), Box<dyn Error>> {
-    let mut ud: Vec<String> = Vec::new();
+    use glob::glob;
+    use std::os::unix::fs::PermissionsExt;
 
+    let fullfiletimelist = match glob(format!("{}/fullfiletimelist-*", url).as_str())?.next() {
+        Some(Ok(fftm)) => fftm.into_os_string().into_string().unwrap(),
+        _ => "".to_string(),
+    };
+
+    if !fullfiletimelist.is_empty() && !skip_fftl {
+        use std::fs;
+
+        debug::print_step(format!(
+            "Local directory ({}) scan using {}",
+            url, fullfiletimelist
+        ));
+        let data = fs::read_to_string(fullfiletimelist)?;
+        let pattern = Regex::new(r"([0-9]*)\t(.*)\t([0-9]*)\t(.*)")?;
+        data.lines()
+            .filter_map(|line| pattern.captures(line))
+            .map(|info| FileInfo {
+                is_directory: info[2].starts_with('d'),
+                is_readable: !info[2].contains('-'),
+                size: info[3].parse().unwrap(),
+                timestamp: info[1].parse().unwrap(),
+                name: Some(info[4].to_string()),
+            })
+            .for_each(|x| {
+                add_entry_to_category_directories(x, cds, excludes, topdir);
+            });
+
+        return Ok(());
+    }
+
+    debug::print_step(format!("Local directory ({}) scan", url));
     WalkDir::new(url)
         .into_iter()
         .filter_entry(|e| is_not_hidden(e))
         .filter_map(|v| v.ok())
         .map(|info| FileInfo {
             is_directory: info.file_type().is_dir(),
-            is_readable: true,
+            is_readable: (info.metadata().unwrap().permissions().mode() & 0o4) != 0,
             size: info.metadata().unwrap().len() as i64,
             timestamp: info
                 .metadata()
@@ -1150,7 +1194,7 @@ fn scan_local_directory(
             },
         })
         .for_each(|x| {
-            add_entry_to_category_directories(x, cds, &mut ud, excludes, topdir);
+            add_entry_to_category_directories(x, cds, excludes, topdir);
         });
 
     Ok(())
@@ -1164,7 +1208,6 @@ fn scan_with_rsync(
     rsync_options: &[String],
     url: &str,
 ) -> Result<(), Box<dyn Error>> {
-    debug::STEPS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     debug::print_step(format!(
         "Running rsync -r --no-human-readable {:?} {:?} {}",
         &rsync_options, &category_rsync_options, url
@@ -1181,8 +1224,6 @@ fn scan_with_rsync(
 
     let pattern = Regex::new(r"([drwSsx-]{10})\s*(.*) (.*) (.*) (.*)")?;
 
-    let mut ud: Vec<String> = Vec::new();
-
     String::from_utf8(output?.stdout)?
         .lines()
         .filter_map(|line| pattern.captures(line))
@@ -1197,35 +1238,39 @@ fn scan_with_rsync(
             },
         })
         .for_each(|x| {
-            add_entry_to_category_directories(x, cds, &mut ud, excludes, topdir);
+            add_entry_to_category_directories(x, cds, excludes, topdir);
         });
 
     Ok(())
 }
 
-fn print_usage(program: &str, opts: Options) {
-    let brief = format!("Usage: {} [options]", program);
-    print!("{}", opts.usage(&brief));
+struct Parameters {
+    list_categories: bool,
+    category_specified: bool,
+    category_name: String,
+    delete_directories: bool,
+    config_file: String,
+    skip_fftl: bool,
 }
 
-fn main() {
-    let mut config_file = String::from("/etc/mirrormanager/scan-primary-mirror.toml");
-
+fn setup_params() -> Parameters {
     let args: Vec<String> = env::args().collect();
     let program = args[0].clone();
-
     let mut opts = Options::new();
-    let mut category = db::functions::Category {
-        id: -1,
-        name: "".to_string(),
-        topdir: "".to_string(),
-        product_id: -1,
+
+    let mut params = Parameters {
+        list_categories: false,
+        category_specified: false,
+        category_name: "".to_string(),
+        delete_directories: false,
+        config_file: String::from("/etc/mirrormanager/scan-primary-mirror.toml"),
+        skip_fftl: false,
     };
 
     opts.optmulti(
         "c",
         "config",
-        &format!("configuration file ({})", config_file),
+        &format!("configuration file ({})", params.config_file),
         "CONFIG",
     );
     opts.optflagmulti("d", "debug", "enable debug");
@@ -1235,31 +1280,72 @@ fn main() {
         "delete-directories",
         "delete directories from the database that no longer exist",
     );
+    opts.optflagmulti(
+        "",
+        "skip-fullfiletimelist",
+        "do not look for a fullfiletimelist-*; actually scan the filesystem",
+    );
+
     opts.optmulti("", "category", "only scan category CATEGORY", "CATEGORY");
 
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         _ => {
-            print_usage(&program, opts);
-            return;
-        }
-    };
-
-    if matches.opt_present("config") {
-        config_file = matches.opt_strs("config")[matches.opt_count("config") - 1].to_string();
-    }
-
-    let settings = match Settings::new(config_file) {
-        Ok(s) => s,
-        Err(e) => {
-            println!("Configuration file parsing failed: {}", e);
-            process::exit(1);
+            print!(
+                "{}",
+                opts.usage(format!("Usage: {} [options]", program).as_str())
+            );
+            process::exit(0);
         }
     };
 
     if matches.opt_present("debug") {
         debug::DEBUG.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     }
+
+    if matches.opt_present("list-categories") {
+        params.list_categories = true;
+    }
+
+    if matches.opt_present("skip-fullfiletimelist") {
+        params.skip_fftl = true;
+    }
+
+    if matches.opt_present("category") {
+        params.category_specified = true;
+        params.category_name =
+            matches.opt_strs("category")[matches.opt_count("category") - 1].to_string();
+    }
+
+    if matches.opt_present("delete-directories") {
+        params.delete_directories = true;
+    }
+
+    if matches.opt_present("config") {
+        params.config_file =
+            matches.opt_strs("config")[matches.opt_count("config") - 1].to_string();
+    }
+
+    params
+}
+
+fn main() {
+    let mut category = db::functions::Category {
+        id: -1,
+        name: "".to_string(),
+        topdir: "".to_string(),
+        product_id: -1,
+    };
+
+    let params = setup_params();
+
+    let settings = match Settings::new(params.config_file) {
+        Ok(s) => s,
+        Err(e) => {
+            println!("Configuration file parsing failed: {}", e);
+            process::exit(1);
+        }
+    };
 
     let connection = match PgConnection::establish(&settings.database.url) {
         Ok(c) => c,
@@ -1271,19 +1357,18 @@ fn main() {
 
     let cl = db::functions::get_categories(&connection);
 
-    if matches.opt_present("list-categories") {
+    if params.list_categories {
         list_categories(&cl);
         process::exit(0);
     }
 
-    if !matches.opt_present("category") {
+    if !params.category_specified {
         println!("Please specify a category using '--category'\n");
         list_categories(&cl);
         process::exit(1);
     }
-    let cat_name = matches.opt_strs("category")[matches.opt_count("category") - 1].to_string();
     for c in &cl {
-        if cat_name == c.name {
+        if params.category_name == c.name {
             category = c.clone();
         }
     }
@@ -1291,7 +1376,7 @@ fn main() {
     if category.id == -1 {
         println!(
             "Category {} not found. Please use one of the following:\n",
-            cat_name
+            params.category_name
         );
         list_categories(&cl);
         process::exit(1);
@@ -1310,13 +1395,16 @@ fn main() {
     let mut config_file_category = settings::Category::default();
 
     for c in config_file_categories {
-        if c.name == cat_name {
+        if c.name == params.category_name {
             config_file_category = c.clone();
         }
     }
 
     if config_file_category.name.is_empty() {
-        println!("Category '{}' not found in configuration file", cat_name);
+        println!(
+            "Category '{}' not found in configuration file",
+            params.category_name
+        );
         process::exit(1);
     }
 
@@ -1358,13 +1446,17 @@ fn main() {
             &rsync_options,
             &config_file_category.url,
         ),
-        "directory" => {
-            scan_local_directory(&mut cds, &excludes, &topdir, &config_file_category.url)
-        }
+        "directory" => scan_local_directory(
+            &mut cds,
+            &excludes,
+            &topdir,
+            &config_file_category.url,
+            params.skip_fftl,
+        ),
         _ => {
             println!(
                 "Cannot handle type '{}' of category '{}'",
-                config_file_category.r#type, cat_name
+                config_file_category.r#type, params.category_name
             );
             process::exit(1);
         }
@@ -1372,6 +1464,8 @@ fn main() {
         println!("Scanning {} failed with {}", &config_file_category.url, e);
         process::exit(1);
     }
+
+    handle_unreadable(&mut cds);
 
     let mut d = db::functions::get_directories(&connection);
 
@@ -1458,7 +1552,7 @@ fn main() {
         process::exit(1);
     }
 
-    if matches.opt_present("delete-directories") {
+    if params.delete_directories {
         if let Err(e) = cleanup_database(&connection, &cds, &d, topdir, category.id) {
             println!("Database cleanup failed {}", e);
             process::exit(1);
