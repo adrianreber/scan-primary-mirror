@@ -57,7 +57,7 @@ fn repo_prefix_test() {
         regex: "[(^^^^".to_string(),
         prefix: "some".to_string(),
     }];
-    let aliases = vec![settings::RepositoryAlias {
+    let mut aliases = vec![settings::RepositoryAlias {
         from: "testing-modular-epel-debug-".to_string(),
         to: "testing-modular-debug-epel".to_string(),
     }];
@@ -148,6 +148,19 @@ fn repo_prefix_test() {
     );
     assert_eq!(
         "fedora-updates-testing-debug-76",
+        repo_prefix(
+            "path/fedora/updates/testing/76/debug".to_string(),
+            "76".to_string(),
+            &rms,
+            &aliases,
+        )
+    );
+    aliases = vec![settings::RepositoryAlias {
+        from: "fedora-updates-testing-debug-".to_string(),
+        to: "debug-testing-updates-fedora".to_string(),
+    }];
+    assert_eq!(
+        "debug-testing-updates-fedora76",
         repo_prefix(
             "path/fedora/updates/testing/76/debug".to_string(),
             "76".to_string(),
