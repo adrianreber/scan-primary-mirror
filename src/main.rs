@@ -316,7 +316,12 @@ fn guess_ver_arch_from_path(
 ///
 /// The returned repository_prefix consists of the prefix from the configuration file
 /// to which the version is added and if appropriate `-source` or `-debug`.
-fn repo_prefix(path: String, version: String, rms: &[settings::RepositoryMapping]) -> String {
+fn repo_prefix(
+    path: String,
+    version: String,
+    rms: &[settings::RepositoryMapping],
+    aliases: &[settings::RepositoryAlias],
+) -> String {
     let mut is_source_or_debug = String::new();
 
     if path.contains("/source") || path.contains("/SRPMS") || path.contains("/src") {
@@ -338,7 +343,13 @@ fn repo_prefix(path: String, version: String, rms: &[settings::RepositoryMapping
             if version == *"rawhide" {
                 return format!("{}-{}{}", rm.prefix, version, is_source_or_debug);
             } else {
-                return format!("{}{}-{}", rm.prefix, is_source_or_debug, version);
+                let mut prefix = format!("{}{}-", rm.prefix, is_source_or_debug);
+                for a in aliases {
+                    if prefix == a.from {
+                        prefix = a.to.clone();
+                    }
+                }
+                return format!("{}{}", prefix, version);
             }
         }
     }
@@ -677,6 +688,9 @@ struct FindRepositories<'a> {
     do_not_display_paths: &'a [String],
     /// Which backend is used to scan the primary mirror
     backend: String,
+    /// List of Repository aliases for some repositories not
+    /// following the default naming scheme.
+    aliases: &'a [settings::RepositoryAlias],
 }
 
 /// Find repositories in the list of scanned directories.
@@ -735,7 +749,7 @@ fn find_repositories(p: &mut FindRepositories) -> Result<usize, Box<dyn Error>> 
                 println!("Not creating repository in database");
                 continue;
             }
-            let prefix = repo_prefix(with_topdir.clone(), version_name, p.rms);
+            let prefix = repo_prefix(with_topdir.clone(), version_name, p.rms, p.aliases);
             if prefix.is_empty() {
                 println!("Not able to determine prefix for {}", with_topdir.clone());
             }
@@ -1488,6 +1502,11 @@ fn main() {
         _ => Vec::new(),
     };
 
+    let repository_aliases: Vec<settings::RepositoryAlias> = match &settings.repository_aliases {
+        Some(ra) => ra.to_vec(),
+        _ => Vec::new(),
+    };
+
     let skip_paths: Vec<String> = match &settings.skip_paths_for_version {
         Some(ex) => ex.to_vec(),
         _ => vec![],
@@ -1530,6 +1549,7 @@ fn main() {
         skip_repository_paths: &skip_repository_paths,
         do_not_display_paths: &do_not_display_paths,
         backend: config_file_category.r#type,
+        aliases: &repository_aliases,
     };
     if let Err(e) = find_repositories(&mut find_parameter) {
         println!("Creating repositories in database failed {}", e);

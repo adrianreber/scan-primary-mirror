@@ -57,30 +57,57 @@ fn repo_prefix_test() {
         regex: "[(^^^^".to_string(),
         prefix: "some".to_string(),
     }];
-    assert_eq!("", repo_prefix("path".to_string(), "76".to_string(), &rms));
+    let mut aliases = vec![settings::RepositoryAlias {
+        from: "testing-modular-epel-debug-".to_string(),
+        to: "testing-modular-debug-epel".to_string(),
+    }];
+    assert_eq!(
+        "",
+        repo_prefix("path".to_string(), "76".to_string(), &rms, &aliases)
+    );
     rms = vec![settings::RepositoryMapping {
         regex: "path".to_string(),
         prefix: "some".to_string(),
     }];
     assert_eq!(
         "some-76",
-        repo_prefix("path".to_string(), "76".to_string(), &rms)
+        repo_prefix("path".to_string(), "76".to_string(), &rms, &aliases)
     );
     assert_eq!(
         "some-source-76",
-        repo_prefix("path/SRPMS/debug".to_string(), "76".to_string(), &rms)
+        repo_prefix(
+            "path/SRPMS/debug".to_string(),
+            "76".to_string(),
+            &rms,
+            &aliases
+        )
     );
     assert_eq!(
         "some-source-76",
-        repo_prefix("path/source/repodata".to_string(), "76".to_string(), &rms)
+        repo_prefix(
+            "path/source/repodata".to_string(),
+            "76".to_string(),
+            &rms,
+            &aliases
+        )
     );
     assert_eq!(
         "some-source-76",
-        repo_prefix("path/src/repodata".to_string(), "76".to_string(), &rms)
+        repo_prefix(
+            "path/src/repodata".to_string(),
+            "76".to_string(),
+            &rms,
+            &aliases
+        )
     );
     assert_eq!(
         "some-debug-76",
-        repo_prefix("path/debug/os".to_string(), "76".to_string(), &rms)
+        repo_prefix(
+            "path/debug/os".to_string(),
+            "76".to_string(),
+            &rms,
+            &aliases
+        )
     );
     rms = vec![
         settings::RepositoryMapping {
@@ -94,18 +121,29 @@ fn repo_prefix_test() {
     ];
     assert_eq!(
         "",
-        repo_prefix("path/debug/os".to_string(), "76".to_string(), &rms)
+        repo_prefix(
+            "path/debug/os".to_string(),
+            "76".to_string(),
+            &rms,
+            &aliases
+        )
     );
     assert_eq!(
         "",
-        repo_prefix("path/fedora/updates".to_string(), "76".to_string(), &rms)
+        repo_prefix(
+            "path/fedora/updates".to_string(),
+            "76".to_string(),
+            &rms,
+            &aliases
+        )
     );
     assert_eq!(
         "fedora-updates-released-76",
         repo_prefix(
             "path/fedora/updates/76/".to_string(),
             "76".to_string(),
-            &rms
+            &rms,
+            &aliases,
         )
     );
     assert_eq!(
@@ -113,7 +151,21 @@ fn repo_prefix_test() {
         repo_prefix(
             "path/fedora/updates/testing/76/debug".to_string(),
             "76".to_string(),
-            &rms
+            &rms,
+            &aliases,
+        )
+    );
+    aliases = vec![settings::RepositoryAlias {
+        from: "fedora-updates-testing-debug-".to_string(),
+        to: "debug-testing-updates-fedora".to_string(),
+    }];
+    assert_eq!(
+        "debug-testing-updates-fedora76",
+        repo_prefix(
+            "path/fedora/updates/testing/76/debug".to_string(),
+            "76".to_string(),
+            &rms,
+            &aliases,
         )
     );
 }
