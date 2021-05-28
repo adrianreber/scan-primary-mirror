@@ -6,6 +6,23 @@ pub struct Database {
 }
 
 #[derive(Debug, Deserialize, Default, Clone)]
+pub struct RepositoryAlias {
+    /// There are a small number of repositories which do not follow
+    /// the expected naming scheme. This offers the possibility
+    /// to create an alias for certain repositories:
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// [[repository_alias]]
+    /// from="testing-modular-epel-debug-"
+    /// to="testing-modular-debug-epel"
+    /// ```
+    pub from: String,
+    pub to: String,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
 pub struct RepositoryMapping {
     /// Each `regex` is used to create from the directory a repository `prefix`
     ///
@@ -69,6 +86,10 @@ pub struct Settings {
     pub category: Option<Vec<Category>>,
     /// Used to create repository prefixes
     pub repository_mapping: Option<Vec<RepositoryMapping>>,
+    /// Some repository prefix cannot combined as
+    /// expected by scan-primary-mirror and therefore
+    /// repository aliases are needed.
+    pub repository_aliases: Option<Vec<RepositoryAlias>>,
 }
 
 impl Settings {
