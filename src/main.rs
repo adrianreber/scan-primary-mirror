@@ -382,37 +382,16 @@ fn check_for_repo(repos: &[db::models::Repository], prefix: String, arch_id: i32
 /// Remove non-existing directories from the database
 ///
 /// If a directory has been deleted on the file system it will still exist in the database. This
-/// function will get the list of directories from the table `category_directory` for the current
-/// directory (as specified in `cat_id`) and compare it with the file system.  Every directory that
-/// does not exist on the file system will be removed from `category_directory`, `directory` and
-/// `file_detail`.
+/// function goes through the list of database directories and if it does not exist on the file
+/// system it will be removed from `category_directory`, `host_category_dir`, `directory`,
+/// `repository' and `file_detail`.
 fn cleanup_database(
     c: &PgConnection,
     cds: &HashMap<String, CategoryDirectory>,
     dirs: &[db::models::Directory],
     topdir: String,
-    cat_id: i32,
 ) -> Result<usize, diesel::result::Error> {
-    debug::STEPS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    let cgs = db::functions::get_category_directories(c, cat_id);
-
     for d in dirs {
-        let mut wrong_category = true;
-        for cg in &cgs {
-            // If the directory is not part of the table category_directory
-            // we will not delete it from the database. Another possible
-            // to cleanup the database would be to compare by name.
-            //
-            // cgs only contains directories for the current category id
-            if cg.directory_id == d.id {
-                wrong_category = false;
-            }
-        }
-
-        if wrong_category {
-            continue;
-        }
-
         let mut dir_gone_from_fs = true;
 
         for k in cds.keys() {
@@ -428,7 +407,7 @@ fn cleanup_database(
         }
 
         if dir_gone_from_fs {
-            debug::STEPS.fetch_add(3, std::sync::atomic::Ordering::SeqCst);
+            debug::STEPS.fetch_add(5, std::sync::atomic::Ordering::SeqCst);
             // Delete from CategoryDirectory (Is it possible to delete multiple entries at once???)
             // Something like 'DELETE FROM category_directory where directory_id = 10 or directory_id = 20'.
             let delete_cd = diesel::delete(
@@ -439,14 +418,23 @@ fn cleanup_database(
             debug::print_step(debug_cd.to_string());
             delete_cd.execute(c)?;
 
-            // Delete from Directory
-            let delete_dir = diesel::delete(
-                db::schema::directory::dsl::directory
-                    .filter(db::schema::directory::dsl::id.eq(d.id)),
+            // Delete from HostCategoryDir
+            let delete_host_category_dir = diesel::delete(
+                db::schema::host_category_dir::dsl::host_category_dir
+                    .filter(db::schema::host_category_dir::dsl::directory_id.eq(d.id)),
             );
-            let debug_dir = diesel::debug_query::<diesel::pg::Pg, _>(&delete_dir);
-            debug::print_step(debug_dir.to_string());
-            delete_dir.execute(c)?;
+            let debug_host_category_dir = diesel::debug_query::<diesel::pg::Pg, _>(&delete_host_category_dir);
+            debug::print_step(debug_host_category_dir.to_string());
+            delete_host_category_dir.execute(c)?;
+
+            // Delete from Repository
+            let delete_repository = diesel::delete(
+                db::schema::repository::dsl::repository
+                    .filter(db::schema::repository::dsl::directory_id.eq(d.id)),
+            );
+            let debug_repository = diesel::debug_query::<diesel::pg::Pg, _>(&delete_repository);
+            debug::print_step(debug_repository.to_string());
+            delete_repository.execute(c)?;
 
             // And remove if from FileDetail
             let delete_fd = diesel::delete(
@@ -456,6 +444,15 @@ fn cleanup_database(
             let debug_fd = diesel::debug_query::<diesel::pg::Pg, _>(&delete_fd);
             debug::print_step(debug_fd.to_string());
             delete_fd.execute(c)?;
+
+            // Delete from Directory
+            let delete_dir = diesel::delete(
+                db::schema::directory::dsl::directory
+                    .filter(db::schema::directory::dsl::id.eq(d.id)),
+            );
+            let debug_dir = diesel::debug_query::<diesel::pg::Pg, _>(&delete_dir);
+            debug::print_step(debug_dir.to_string());
+            delete_dir.execute(c)?;
         }
     }
     Ok(0)
@@ -1153,26 +1150,26 @@ fn scan_local_directory(
     };
 
     if !fullfiletimelist.is_empty() && !skip_fftl {
-        use std::fs;
-
         debug::print_step(format!(
             "Local directory ({}) scan using {}",
             url, fullfiletimelist
         ));
-        let data = fs::read_to_string(fullfiletimelist)?;
-        let pattern = Regex::new(r"([0-9]*)\t(.*)\t([0-9]*)\t(.*)")?;
-        data.lines()
-            .filter_map(|line| pattern.captures(line))
-            .map(|info| FileInfo {
-                is_directory: info[2].starts_with('d'),
-                is_readable: !info[2].contains('-'),
-                size: info[3].parse().unwrap(),
-                timestamp: info[1].parse().unwrap(),
-                name: Some(info[4].to_string()),
-            })
-            .for_each(|x| {
-                add_entry_to_category_directories(x, cds, excludes, topdir);
-            });
+        let file = std::fs::File::open(fullfiletimelist)?;
+        let data = unsafe { memmap::MmapOptions::new().map(&file)? };
+        for line in data.split(|elem| elem == &b'\n') {
+            let v: Vec<&str> = std::str::from_utf8(line)?.split('\t').collect();
+            if v.len() < 4 {
+                continue;
+            }
+            let info = FileInfo {
+                is_directory: v[1].starts_with('d'),
+                is_readable: !v[1].contains('-'),
+                size: v[2].parse()?,
+                timestamp: v[0].parse()?,
+                name: Some(v[3].to_string()),
+            };
+            add_entry_to_category_directories(info, cds, excludes, topdir);
+        }
 
         return Ok(());
     }
@@ -1481,7 +1478,7 @@ fn main() {
 
     handle_unreadable(&mut cds);
 
-    let mut d = db::functions::get_directories(&connection);
+    let mut d = db::functions::get_directories(&connection, category.id);
 
     if let Err(e) =
         sync_category_directories(&connection, topdir.clone(), category.id, &mut d, &mut cds)
@@ -1573,7 +1570,7 @@ fn main() {
     }
 
     if params.delete_directories {
-        if let Err(e) = cleanup_database(&connection, &cds, &d, topdir, category.id) {
+        if let Err(e) = cleanup_database(&connection, &cds, &d, topdir) {
             println!("Database cleanup failed {}", e);
             process::exit(1);
         }

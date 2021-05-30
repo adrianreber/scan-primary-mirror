@@ -71,6 +71,14 @@ table! {
     }
 }
 
+table! {
+    host_category_dir (id) {
+        id -> Integer,
+        directory_id -> Integer,
+    }
+}
+
 joinable!(category -> directory (topdir_id));
 
 allow_tables_to_appear_in_same_query!(category, directory);
+allow_tables_to_appear_in_same_query!(category_directory, directory);

@@ -317,7 +317,7 @@ fn sync_category_directories_test() {
         .is_err());
 
     // this is empty
-    let mut dirs = db::functions::get_directories(&c);
+    let mut dirs = db::functions::get_directories(&c, 37);
     let mut cds: HashMap<String, CategoryDirectory> = HashMap::new();
 
     let mut cd1 = CategoryDirectory {
@@ -339,7 +339,7 @@ fn sync_category_directories_test() {
     assert_eq!(dirs[0].readable, true);
     assert_eq!(dirs[0].name, "topdir/directory1".to_string());
 
-    dirs = db::functions::get_directories(&c);
+    dirs = db::functions::get_directories(&c, 37);
     // test after reading from database
     assert_eq!(dirs.len(), 1);
     assert_eq!(dirs[0].ctime, 1000);
@@ -352,7 +352,7 @@ fn sync_category_directories_test() {
     assert!(
         !sync_category_directories(&c, "topdir/".to_string(), 37, &mut dirs, &mut cds).is_err()
     );
-    dirs = db::functions::get_directories(&c);
+    dirs = db::functions::get_directories(&c, 37);
     assert_eq!(dirs.len(), 1);
     // this should have been updated
     assert_eq!(dirs[0].ctime, 2000);
