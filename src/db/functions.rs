@@ -121,16 +121,23 @@ pub fn get_categories(c: &PgConnection) -> Vec<Category> {
 ///
 /// ctime is the most important parameter to detect if
 /// something has changed on the primary mirror.
-pub fn get_directories(c: &PgConnection) -> Vec<Directory> {
+pub fn get_directories(c: &PgConnection, cat_id: i32) -> Vec<Directory> {
+    use crate::db::schema::category_directory;
     use crate::db::schema::directory;
 
-    let query = directory::dsl::directory.select((
-        directory::dsl::id,
-        directory::dsl::name,
-        directory::dsl::files,
-        directory::dsl::readable,
-        directory::dsl::ctime,
-    ));
+    let subselect = category_directory::dsl::category_directory
+        .select(category_directory::dsl::directory_id)
+        .filter(category_directory::dsl::category_id.eq(cat_id));
+
+    let query = directory::dsl::directory
+        .select((
+            directory::dsl::id,
+            directory::dsl::name,
+            directory::dsl::files,
+            directory::dsl::readable,
+            directory::dsl::ctime,
+        ))
+        .filter(directory::dsl::id.eq_any(subselect));
     let debug = diesel::debug_query::<diesel::pg::Pg, _>(&query);
     print_step(debug.to_string());
     query
@@ -139,7 +146,7 @@ pub fn get_directories(c: &PgConnection) -> Vec<Directory> {
 }
 
 /// This retrieves the list of which directory belongs to given category.
-pub fn get_category_directories(c: &PgConnection, cat_id: i32) -> Vec<CategoryDirectory> {
+pub fn _get_category_directories(c: &PgConnection, cat_id: i32) -> Vec<CategoryDirectory> {
     use crate::db::schema::category_directory;
 
     let query = category_directory::dsl::category_directory
