@@ -204,6 +204,30 @@ fn age_file_details_test() {
         }
     };
 
+    let dirs = vec![
+        db::models::Directory {
+            id: 7,
+            name: "dirname7".to_string(),
+            files: Vec::new(),
+            readable: true,
+            ctime: 0,
+        },
+        db::models::Directory {
+            id: 8,
+            name: "dirname8".to_string(),
+            files: Vec::new(),
+            readable: true,
+            ctime: 0,
+        },
+        db::models::Directory {
+            id: 9,
+            name: "dirname9".to_string(),
+            files: Vec::new(),
+            readable: true,
+            ctime: 0,
+        },
+    ];
+
     assert!(!diesel::delete(db::schema::file_detail::dsl::file_detail)
         .execute(&c)
         .is_err());
@@ -217,6 +241,16 @@ fn age_file_details_test() {
     let fd_7_5 = db::models::InsertFileDetail {
         directory_id: 7,
         filename: String::from("repomd.xml"),
+        timestamp: Some(five),
+        size: Some(40),
+        sha1: Some(String::from("sha1")),
+        md5: Some(String::from("md5")),
+        sha256: Some(String::from("sha256")),
+        sha512: Some(String::from("sha512")),
+    };
+    let fd_7_5_other = db::models::InsertFileDetail {
+        directory_id: 7,
+        filename: String::from("other_name"),
         timestamp: Some(five),
         size: Some(40),
         sha1: Some(String::from("sha1")),
@@ -254,11 +288,45 @@ fn age_file_details_test() {
         sha256: Some(String::from("sha256")),
         sha512: Some(String::from("sha512")),
     };
+    let fd_10_5 = db::models::InsertFileDetail {
+        directory_id: 10,
+        filename: String::from("repomd.xml"),
+        timestamp: Some(five),
+        size: Some(40),
+        sha1: Some(String::from("sha1")),
+        md5: Some(String::from("md5")),
+        sha256: Some(String::from("sha256")),
+        sha512: Some(String::from("sha512")),
+    };
+    let fd_10_4 = db::models::InsertFileDetail {
+        directory_id: 10,
+        filename: String::from("repomd.xml"),
+        timestamp: Some(four),
+        size: Some(40),
+        sha1: Some(String::from("sha1")),
+        md5: Some(String::from("md5")),
+        sha256: Some(String::from("sha256")),
+        sha512: Some(String::from("sha512")),
+    };
+    let fd_10_3 = db::models::InsertFileDetail {
+        directory_id: 10,
+        filename: String::from("repomd.xml"),
+        timestamp: Some(three),
+        size: Some(40),
+        sha1: Some(String::from("sha1")),
+        md5: Some(String::from("md5")),
+        sha256: Some(String::from("sha256")),
+        sha512: Some(String::from("sha512")),
+    };
 
     ifds.push(fd_7_5);
+    ifds.push(fd_7_5_other);
     ifds.push(fd_8_3);
     ifds.push(fd_7_4);
     ifds.push(fd_7_3);
+    ifds.push(fd_10_5);
+    ifds.push(fd_10_4);
+    ifds.push(fd_10_3);
 
     if let Err(e) = diesel::insert_into(db::schema::file_detail::dsl::file_detail)
         .values(&ifds)
@@ -270,7 +338,7 @@ fn age_file_details_test() {
 
     let mut fds = db::functions::get_file_details(&c);
     let fds_org = db::functions::get_file_details(&c);
-    if let Err(e) = age_file_details(&c, &mut fds, 6, 5) {
+    if let Err(e) = age_file_details(&c, &mut fds, &dirs, 6, 5) {
         println!("Running age_file_details() failed {}", e);
         panic!();
     }
@@ -279,18 +347,18 @@ fn age_file_details_test() {
         .eq(db::functions::get_file_details(&c).iter()));
 
     fds = db::functions::get_file_details(&c);
-    if let Err(e) = age_file_details(&c, &mut fds, 4, 3) {
+    if let Err(e) = age_file_details(&c, &mut fds, &dirs, 4, 3) {
         println!("Running age_file_details() failed {}", e);
         panic!();
     }
-    assert_eq!(3, db::functions::get_file_details(&c).len());
+    assert_eq!(7, db::functions::get_file_details(&c).len());
 
     fds = db::functions::get_file_details(&c);
-    if let Err(e) = age_file_details(&c, &mut fds, 1, 0) {
+    if let Err(e) = age_file_details(&c, &mut fds, &dirs, 1, 0) {
         println!("Running age_file_details() failed {}", e);
         panic!();
     }
-    assert_eq!(2, db::functions::get_file_details(&c).len());
+    assert_eq!(6, db::functions::get_file_details(&c).len());
 }
 
 #[test]

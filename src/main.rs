@@ -107,6 +107,7 @@ struct UpdateDirectory {
 fn age_file_details(
     c: &PgConnection,
     fds: &mut Vec<db::models::FileDetail>,
+    dirs: &[db::models::Directory],
     max_stale_days: i64,
     max_propagation_days: i64,
 ) -> Result<(), diesel::result::Error> {
@@ -122,6 +123,7 @@ fn age_file_details(
 
     let mut old_id: i32 = -1;
     let mut old_ts: i64 = -1;
+    let mut old_name = String::from("");
     let now = chrono::offset::Local::now().timestamp();
     let stale = now - (60 * 60 * 24 * max_stale_days);
     let propagation = now - (60 * 60 * 24 * max_propagation_days);
@@ -130,11 +132,23 @@ fn age_file_details(
     let mut delete_list: Vec<i32> = Vec::new();
 
     for fd in fds {
+        let mut in_dirs = false;
+        for d in dirs {
+            if fd.directory_id == d.id {
+                in_dirs = true;
+                break;
+            }
+        }
+
+        if !in_dirs {
+            continue;
+        }
+
         let ts = match fd.timestamp {
             Some(t) => t,
             _ => continue,
         };
-        if fd.directory_id == old_id {
+        if fd.directory_id == old_id && fd.filename == old_name {
             same_entries += 1;
             if ts < stale && (same_entries > 2 || old_ts < propagation) {
                 delete_list.push(fd.id);
@@ -144,6 +158,7 @@ fn age_file_details(
             old_ts = ts;
         }
         old_id = fd.directory_id;
+        old_name = fd.filename.clone();
     }
 
     if !delete_list.is_empty() {
@@ -423,7 +438,8 @@ fn cleanup_database(
                 db::schema::host_category_dir::dsl::host_category_dir
                     .filter(db::schema::host_category_dir::dsl::directory_id.eq(d.id)),
             );
-            let debug_host_category_dir = diesel::debug_query::<diesel::pg::Pg, _>(&delete_host_category_dir);
+            let debug_host_category_dir =
+                diesel::debug_query::<diesel::pg::Pg, _>(&delete_host_category_dir);
             debug::print_step(debug_host_category_dir.to_string());
             delete_host_category_dir.execute(c)?;
 
@@ -1556,6 +1572,7 @@ fn main() {
     if let Err(e) = age_file_details(
         &connection,
         &mut fds,
+        &d,
         match settings.max_stale_days {
             Some(m) => m,
             _ => 3,
