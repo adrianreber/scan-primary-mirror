@@ -1207,7 +1207,7 @@ fn scan_local_directory(
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap()
                 .as_secs() as i64,
-            name: match info
+            name: info
                 .path()
                 .display()
                 .to_string()
@@ -1215,10 +1215,7 @@ fn scan_local_directory(
                 .map(str::to_string)
                 .collect::<Vec<String>>()
                 .get(1)
-            {
-                Some(n) => Some(n.clone()),
-                _ => None,
-            },
+                .cloned(),
         })
         .for_each(|x| {
             add_entry_to_category_directories(x, cds, excludes, topdir);
@@ -1259,10 +1256,7 @@ fn scan_with_rsync(
             is_readable: Regex::new(r"^d......r.x").unwrap().is_match(&info[1]),
             size: info[2].parse().unwrap(),
             timestamp: ctime_from_rsync(info[3].to_string(), info[4].to_string()),
-            name: match info.get(5) {
-                Some(n) => Some(n.as_str().trim().to_string()),
-                _ => None,
-            },
+            name: info.get(5).map(|n| n.as_str().trim().to_string()),
         })
         .for_each(|x| {
             add_entry_to_category_directories(x, cds, excludes, topdir);
