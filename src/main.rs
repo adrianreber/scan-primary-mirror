@@ -1455,6 +1455,7 @@ fn main() {
 
     let topdir = match category.topdir.ends_with('/') {
         true => String::from(&category.topdir),
+        false if category.topdir.is_empty() => String::from(""),
         false => format!("{}/", category.topdir),
     };
 
