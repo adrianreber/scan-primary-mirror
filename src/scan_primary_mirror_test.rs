@@ -872,6 +872,21 @@ fn scan_with_rsync_test() {
     }
 
     assert!(repomd_found);
+
+    if scan_with_rsync(&mut cds, &[], "", &[], &[], "test").is_err() {
+        panic!();
+    }
+    assert_eq!(cds.len(), 1);
+
+    repomd_found = false;
+
+    for f in cds["test"].files.clone() {
+        if f.name == "repomd.xml" && f.size == 93 {
+            repomd_found = true;
+        }
+    }
+
+    assert!(repomd_found);
 }
 
 #[test]
