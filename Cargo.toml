@@ -21,7 +21,7 @@ reqwest = { version = "0.11.4", features = ["blocking"] }
 serde-xml-rs = "0.5.0"
 md-5 = "0.9.1"
 sha-1 = "0.9.8"
-sha2 = "0.9.6"
+sha2 = "0.9.8"
 walkdir = "2"
 glob = "0.3.0"
 memmap = "0.7.0"
