@@ -404,14 +404,14 @@ fn sync_category_directories_test() {
     // now it should contain the entry from above
     assert_eq!(dirs.len(), 1);
     assert_eq!(dirs[0].ctime, 1000);
-    assert_eq!(dirs[0].readable, true);
+    assert!(dirs[0].readable);
     assert_eq!(dirs[0].name, "topdir/directory1".to_string());
 
     dirs = db::functions::get_directories(&c, 37);
     // test after reading from database
     assert_eq!(dirs.len(), 1);
     assert_eq!(dirs[0].ctime, 1000);
-    assert_eq!(dirs[0].readable, true);
+    assert!(dirs[0].readable);
     assert_eq!(dirs[0].name, "topdir/directory1".to_string());
     // update entry
     cd1.ctime = 2000;
@@ -424,7 +424,7 @@ fn sync_category_directories_test() {
     assert_eq!(dirs.len(), 1);
     // this should have been updated
     assert_eq!(dirs[0].ctime, 2000);
-    assert_eq!(dirs[0].readable, true);
+    assert!(dirs[0].readable);
     assert_eq!(dirs[0].name, "topdir/directory1".to_string());
 }
 
@@ -545,7 +545,7 @@ fn guess_ver_arch_from_path_test() {
     };
     assert_eq!(1, versions.len());
     assert_eq!("8.88", versions[0].name);
-    assert_eq!(false, versions[0].is_test);
+    assert!(!versions[0].is_test);
     assert_eq!(87, versions[0].product_id);
 
     // clean tables for test
@@ -583,8 +583,8 @@ fn guess_ver_arch_from_path_test() {
     };
     assert_eq!(1, insert_versions.len());
     assert_eq!("8.88", insert_versions[0].name);
-    assert_eq!(true, insert_versions[0].is_test);
-    assert_eq!(true, insert_versions[0].display);
+    assert!(insert_versions[0].is_test);
+    assert!(insert_versions[0].display);
     assert_eq!(87, insert_versions[0].product_id);
 
     // clean tables for test
@@ -623,8 +623,8 @@ fn guess_ver_arch_from_path_test() {
     };
     assert_eq!(1, insert_versions.len());
     assert_eq!("8.88_Beta", insert_versions[0].name);
-    assert_eq!(true, insert_versions[0].is_test);
-    assert_eq!(false, insert_versions[0].display);
+    assert!(insert_versions[0].is_test);
+    assert!(!insert_versions[0].display);
     assert_eq!(87, insert_versions[0].product_id);
 }
 
@@ -727,30 +727,69 @@ fn get_timestamp_test() {
 }
 
 #[test]
-fn get_details_via_http_test() {
-    assert!(get_details_via_http(&None, "test", "").is_err());
+fn get_details_test() {
+    assert!(get_details(&None, "test", "", "repomd.xml", "rsync").is_err());
     println!(
         "{:#?}",
-        get_details_via_http(&Some("http://www.example/".to_string()), "test", "")
+        get_details(
+            &Some("http://www.example/".to_string()),
+            "test",
+            "",
+            "repomd.xml",
+            "rsync"
+        )
     );
-    assert!(get_details_via_http(&Some("http://www.example/".to_string()), "test", "").is_err());
+    assert!(get_details(
+        &Some("http://www.example/".to_string()),
+        "test",
+        "",
+        "repomd.xml",
+        "rsync"
+    )
+    .is_err());
 
-    let dr = match get_details_via_http(&Some("http://localhost:17397/".to_string()), "test", "") {
+    let mut drs = match get_details(
+        &Some("http://localhost:17397/".to_string()),
+        "test",
+        "",
+        "repomd.xml",
+        "rsync",
+    ) {
         Ok(d) => d,
         Err(e) => {
             println!("Error {}", e);
             panic!();
         }
     };
-    assert_eq!(dr.md5_sum, "c3002eefddc963954306e38632dbeca4");
-    assert_eq!(dr.sha1_sum, "226c58402e3bc46d4e9f8bde740594430f4eea01");
+    assert_eq!(drs[0].md5_sum, "c3002eefddc963954306e38632dbeca4");
+    assert_eq!(drs[0].sha1_sum, "226c58402e3bc46d4e9f8bde740594430f4eea01");
     assert_eq!(
-        dr.sha256_sum,
+        drs[0].sha256_sum,
         "fa079bc0df97e4479c950b64e1f34c74a9da393f80eba7218c56edf8931907ce"
     );
-    assert_eq!(dr.sha512_sum, "bccb1871d3b5670fdc6967155bced4d4f9978f4428c19407733bfabbf7aecb6c9de566629fed5e0d41c3ab93c96562dfc49e5ebb6a8f8dffcbbc411b5d1d9d52");
-    assert_eq!(dr.length, 93);
-    assert_eq!(dr.timestamp, 7);
+    assert_eq!(drs[0].sha512_sum, "bccb1871d3b5670fdc6967155bced4d4f9978f4428c19407733bfabbf7aecb6c9de566629fed5e0d41c3ab93c96562dfc49e5ebb6a8f8dffcbbc411b5d1d9d52");
+    assert_eq!(drs[0].length, 93);
+    assert_eq!(drs[0].timestamp, 7);
+    assert_eq!(drs[0].target, "repomd.xml");
+
+    // Same test using 'directory' backend
+    drs = match get_details(&Some("".to_string()), "test", "", "repomd.xml", "directory") {
+        Ok(d) => d,
+        Err(e) => {
+            println!("Error {}", e);
+            panic!();
+        }
+    };
+    assert_eq!(drs[0].md5_sum, "c3002eefddc963954306e38632dbeca4");
+    assert_eq!(drs[0].sha1_sum, "226c58402e3bc46d4e9f8bde740594430f4eea01");
+    assert_eq!(
+        drs[0].sha256_sum,
+        "fa079bc0df97e4479c950b64e1f34c74a9da393f80eba7218c56edf8931907ce"
+    );
+    assert_eq!(drs[0].sha512_sum, "bccb1871d3b5670fdc6967155bced4d4f9978f4428c19407733bfabbf7aecb6c9de566629fed5e0d41c3ab93c96562dfc49e5ebb6a8f8dffcbbc411b5d1d9d52");
+    assert_eq!(drs[0].length, 93);
+    assert_eq!(drs[0].timestamp, 7);
+    assert_eq!(drs[0].target, "repomd.xml");
 }
 
 #[test]
@@ -760,12 +799,14 @@ fn fill_ifds_test() {
 
     if fill_ifds(&mut FillIfds {
         ifds: &mut ifds,
+        target: "repomd.xml",
         backend: "never-supported",
         checksum_base: &Some("http://localhost:17397/".to_string()),
         topdir: "test",
         dir: "",
         d_id: 65,
         fds: &fds,
+        files: &None,
     })
     .is_ok()
     {
@@ -773,12 +814,14 @@ fn fill_ifds_test() {
     }
     if fill_ifds(&mut FillIfds {
         ifds: &mut ifds,
+        target: "repomd.xml",
         backend: "rsync",
         checksum_base: &Some("http://localhost:17397/".to_string()),
         topdir: "test",
         dir: "",
         d_id: 65,
         fds: &fds,
+        files: &None,
     })
     .is_err()
     {
@@ -818,12 +861,14 @@ fn fill_ifds_test() {
     } ];
     if fill_ifds(&mut FillIfds {
         ifds: &mut ifds,
+        target: "repomd.xml",
         backend: "rsync",
         checksum_base: &Some("http://localhost:17397/".to_string()),
         topdir: "test",
         dir: "",
         d_id: 65,
         fds: &fds,
+        files: &None,
     })
     .is_err()
     {
@@ -835,12 +880,14 @@ fn fill_ifds_test() {
     fds[0].timestamp = Some(6);
     if fill_ifds(&mut FillIfds {
         ifds: &mut ifds,
+        target: "repomd.xml",
         backend: "rsync",
         checksum_base: &Some("http://localhost:17397/".to_string()),
         topdir: "test",
         dir: "",
         d_id: 65,
         fds: &fds,
+        files: &None,
     })
     .is_err()
     {
@@ -971,4 +1018,81 @@ fn scan_local_directory_test() {
     }
 
     assert!(repomd_found);
+}
+
+#[test]
+fn find_repositories_test() {
+    let c = match get_db_connection() {
+        Ok(c) => c,
+        Err(e) => {
+            println!("Database connection failed {}", e);
+            panic!();
+        }
+    };
+
+    // clean tables for test
+    assert!(!diesel::delete(db::schema::version::dsl::version)
+        .execute(&c)
+        .is_err());
+
+    let mut cds: HashMap<String, CategoryDirectory> = HashMap::new();
+    if scan_with_rsync(&mut cds, &[], "", &[], &[], "test").is_err() {
+        panic!();
+    }
+    assert_eq!(cds.len(), 1);
+    cds.get_mut(&"test".to_string()).unwrap().ctime_changed = true;
+
+    let category = db::functions::Category {
+        id: 1,
+        name: "Category".to_string(),
+        topdir: "".to_string(),
+        product_id: 5,
+    };
+
+    let repositories = vec![db::models::Repository {
+        id: 1000,
+        name: "RepositoryName".to_string(),
+        prefix: Some("Prefix".to_string()),
+        category_id: Some(1),
+        version_id: Some(1),
+        arch_id: Some(1),
+        directory_id: Some(1),
+        disabled: false,
+    }];
+
+    let rms = vec![settings::RepositoryMapping {
+        regex: "[(^^^^".to_string(),
+        prefix: "some".to_string(),
+    }];
+
+    let mut fds = db::functions::get_file_details(&c);
+    let aliases = vec![settings::RepositoryAlias {
+        from: "testing-modular-epel-debug-".to_string(),
+        to: "testing-modular-debug-epel".to_string(),
+    }];
+
+    let mut find_parameter = FindRepositories {
+        c: &c,
+        cds: &mut cds,
+        checksum_base: Some("http://localhost:17397/".to_string()),
+        top: "".to_string(),
+        cat: &category,
+        repos: &repositories,
+        rms: &rms,
+        fds: &mut fds,
+        skip_paths: &["skip".to_string()],
+        test_paths: &["skip-test".to_string()],
+        skip_repository_paths: &["skip".to_string()],
+        do_not_display_paths: &["skip".to_string()],
+        backend: "rsync".to_string(),
+        aliases: &aliases,
+    };
+    if let Err(e) = find_repositories(&mut find_parameter) {
+        println!("Creating repositories in database failed {}", e);
+        panic!();
+    }
+    assert_eq!(
+        fds.last().unwrap().sha256.as_ref().unwrap(),
+        "55bd241dae474d89225650a0dd6446d21cbdccb607062e675543b91e074364a3"
+    );
 }

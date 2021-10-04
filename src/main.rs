@@ -482,75 +482,67 @@ struct DetailsResult {
     sha512_sum: String,
     length: i64,
     timestamp: i64,
+    target: String,
 }
 
-fn get_details_via_fs(
-    local_prefix: &Option<String>,
+fn get_file_content(
+    base: &Option<String>,
     topdir: &str,
     dir: &str,
-) -> Result<DetailsResult, Box<dyn Error>> {
+    target: &str,
+    backend: &str,
+) -> Result<(String, i64), Box<dyn Error>> {
     use std::fs;
 
-    let repomd = format!(
-        "{}{}{}/repomd.xml",
-        match local_prefix {
+    let backend_config_name = match backend {
+        "directory" => "local_prefix",
+        "rsync" => "checksum_base",
+        _ => return Err(format!("Do not know how to handle backend '{}'", backend).into()),
+    };
+
+    let full_target = format!(
+        "{}{}{}/{}",
+        match base {
             Some(c) => c,
-            _ => return Err(("For backend 'directory' 'local_prefix' needs to be set").into()),
+            _ =>
+                return Err(format!(
+                    "For backend '{}' '{}' needs to be set",
+                    backend, backend_config_name
+                )
+                .into()),
         },
         topdir,
-        dir
+        dir,
+        target,
     );
 
-    let body = fs::read_to_string(&repomd)?;
+    if backend == "directory" {
+        return Ok((
+            fs::read_to_string(&full_target)?,
+            fs::metadata(full_target)?.len() as i64,
+        ));
+    }
 
-    let content_length: i64 = fs::metadata(repomd)?.len() as i64;
-
-    use md5::{Digest, Md5};
-    use sha1::Sha1;
-    use sha2::{Sha256, Sha512};
-
-    let mut md5 = Md5::new();
-    md5.update(&body);
-    let mut sha1 = Sha1::new();
-    sha1.update(&body);
-    let mut sha256 = Sha256::new();
-    sha256.update(&body);
-    let mut sha512 = Sha512::new();
-    sha512.update(&body);
-
-    return Ok(DetailsResult {
-        md5_sum: format!("{:x}", md5.finalize()),
-        sha1_sum: format!("{:x}", sha1.finalize()),
-        sha256_sum: format!("{:x}", sha256.finalize()),
-        sha512_sum: format!("{:x}", sha512.finalize()),
-        length: content_length,
-        timestamp: xml::get_timestamp(body),
-    });
-}
-
-fn get_details_via_http(
-    checksum_base: &Option<String>,
-    topdir: &str,
-    dir: &str,
-) -> Result<DetailsResult, Box<dyn Error>> {
-    let url = format!(
-        "{}{}{}/repomd.xml",
-        match checksum_base {
-            Some(c) => c,
-            _ => return Err(("For backend 'rsync' 'checksum_base' needs to be set").into()),
-        },
-        topdir,
-        dir
-    );
-    let resp = match reqwest::blocking::get(&url) {
+    let resp = match reqwest::blocking::get(&full_target) {
         Ok(r) => r,
-        Err(e) => return Err(format!("Error '{}' retrieving '{}'", e, url).into()),
+        Err(e) => return Err(format!("Error '{}' retrieving '{}'", e, full_target).into()),
     };
     let content_length: i64 = match resp.headers().get("content-length") {
         Some(r) => r.to_str()?.parse::<i64>()?,
         _ => 0,
     };
-    let body = resp.text()?;
+
+    Ok((resp.text()?, content_length))
+}
+
+fn get_details(
+    checksum_base: &Option<String>,
+    topdir: &str,
+    dir: &str,
+    target: &str,
+    backend: &str,
+) -> Result<Vec<DetailsResult>, Box<dyn Error>> {
+    let (body, content_length) = get_file_content(checksum_base, topdir, dir, target, backend)?;
 
     use md5::{Digest, Md5};
     use sha1::Sha1;
@@ -565,20 +557,84 @@ fn get_details_via_http(
     let mut sha512 = Sha512::new();
     sha512.update(&body);
 
-    return Ok(DetailsResult {
+    return Ok(vec![DetailsResult {
         md5_sum: format!("{:x}", md5.finalize()),
         sha1_sum: format!("{:x}", sha1.finalize()),
         sha256_sum: format!("{:x}", sha256.finalize()),
         sha512_sum: format!("{:x}", sha512.finalize()),
         length: content_length,
         timestamp: xml::get_timestamp(body),
-    });
+        target: target.to_string(),
+    }]);
+}
+
+fn get_details_via_checksum_file(
+    checksum_base: &Option<String>,
+    topdir: &str,
+    dir: &str,
+    target: &str,
+    backend: &str,
+    files: &Option<Vec<File>>,
+) -> Result<Vec<DetailsResult>, Box<dyn Error>> {
+    let (body, _) = get_file_content(checksum_base, topdir, dir, target, backend)?;
+
+    let mut drs: Vec<DetailsResult> = Vec::new();
+
+    if files.is_none() {
+        return Ok(Vec::new());
+    }
+
+    'outer: for line in body.lines() {
+        let elements = line.split(' ').collect::<Vec<_>>();
+        if elements.len() == 4 {
+            // We are looking for lines like this
+            // SHA256 (Fedora-Cloud-Base-34_Beta-1.3.x86_64.qcow2) = e2f87e760162a596a0adeb14d4d563fcad25b5954d3064d98eefda24691574b5
+            // Currently only SHA256 is used in the files so let's look for that and SHA512
+            if elements[0] != "SHA256" && elements[0] != "SHA512" {
+                continue 'outer;
+            }
+
+            // Check if the file exists
+            let mut file = File::default();
+            let file_name = elements[1].trim_start_matches('(').trim_end_matches(')');
+            for f in files.as_ref().unwrap() {
+                if f.name == file_name {
+                    file = f.clone();
+                    break;
+                }
+            }
+            if file.name.is_empty() {
+                continue 'outer;
+            }
+
+            let dr = DetailsResult {
+                md5_sum: String::new(),
+                sha1_sum: String::new(),
+                sha256_sum: match elements[0] {
+                    "SHA256" => elements[3].to_string(),
+                    _ => String::new(),
+                },
+                sha512_sum: match elements[0] {
+                    "SHA512" => elements[3].to_string(),
+                    _ => String::new(),
+                },
+                length: file.size,
+                timestamp: file.timestamp,
+                target: file.name,
+            };
+            drs.push(dr);
+        }
+    }
+
+    Ok(drs)
 }
 
 /// Parameter for the `fill_ifds()` funcion
 struct FillIfds<'a> {
     /// InsertFileDetail return vector
     ifds: &'a mut Vec<db::models::InsertFileDetail>,
+    /// The name of the checksum target file
+    target: &'a str,
     /// Which backend this is using
     backend: &'a str,
     /// The base for creating checksums. For rsync a http URL
@@ -592,73 +648,87 @@ struct FillIfds<'a> {
     d_id: i32,
     /// The currently in the database existing entries
     fds: &'a [db::models::FileDetail],
+    /// The list of files in this directory. Only used
+    /// for '-CHECKSUM' files.
+    files: &'a Option<Vec<File>>,
 }
 
 fn fill_ifds(p: &mut FillIfds) -> Result<(), Box<dyn Error>> {
-    let dr = match p.backend {
-        "rsync" => get_details_via_http(p.checksum_base, p.topdir, p.dir)?,
-        "directory" => get_details_via_fs(p.checksum_base, p.topdir, p.dir)?,
-        _ => return Err(("Unsupported scan backend '{}'").into()),
-    };
-    let target = String::from("repomd.xml");
-    let mut found_in_db = false;
-
-    // find repomd.xml in file_details
-    for fd in p.fds {
-        let timestamp_db = match fd.timestamp {
-            Some(t) => t,
-            _ => 0,
-        };
-
-        let size_db = match fd.size {
-            Some(s) => s,
-            _ => 0,
-        };
-
-        let sha1_db = match &fd.sha1 {
-            Some(s) => String::from(s),
-            _ => String::from(""),
-        };
-
-        let md5_db = match &fd.md5 {
-            Some(s) => String::from(s),
-            _ => String::from(""),
-        };
-
-        let sha256_db = match &fd.sha256 {
-            Some(s) => String::from(s),
-            _ => String::from(""),
-        };
-
-        let sha512_db = match &fd.sha512 {
-            Some(s) => String::from(s),
-            _ => String::from(""),
-        };
-
-        if fd.directory_id == p.d_id
-            && fd.filename == target
-            && size_db == dr.length
-            && timestamp_db == dr.timestamp
-            && sha1_db == dr.sha1_sum
-            && md5_db == dr.md5_sum
-            && sha256_db == dr.sha256_sum
-            && sha512_db == dr.sha512_sum
-        {
-            found_in_db = true;
+    let drs = match p.backend {
+        "rsync" | "directory" if p.target.ends_with("-CHECKSUM") => get_details_via_checksum_file(
+            p.checksum_base,
+            p.topdir,
+            p.dir,
+            p.target,
+            p.backend,
+            p.files,
+        )?,
+        "rsync" | "directory" => {
+            get_details(p.checksum_base, p.topdir, p.dir, p.target, p.backend)?
         }
-    }
+        _ => return Err(format!("Unsupported scan backend '{}'", p.backend).into()),
+    };
 
-    if !found_in_db {
-        p.ifds.push(db::models::InsertFileDetail {
-            directory_id: p.d_id,
-            filename: target,
-            timestamp: Some(dr.timestamp),
-            size: Some(dr.length),
-            sha1: Some(dr.sha1_sum),
-            md5: Some(dr.md5_sum),
-            sha256: Some(dr.sha256_sum),
-            sha512: Some(dr.sha512_sum),
-        });
+    for dr in drs {
+        let mut found_in_db = false;
+
+        // find repomd.xml in file_details
+        for fd in p.fds {
+            let timestamp_db = match fd.timestamp {
+                Some(t) => t,
+                _ => 0,
+            };
+
+            let size_db = match fd.size {
+                Some(s) => s,
+                _ => 0,
+            };
+
+            let sha1_db = match &fd.sha1 {
+                Some(s) => String::from(s),
+                _ => String::from(""),
+            };
+
+            let md5_db = match &fd.md5 {
+                Some(s) => String::from(s),
+                _ => String::from(""),
+            };
+
+            let sha256_db = match &fd.sha256 {
+                Some(s) => String::from(s),
+                _ => String::from(""),
+            };
+
+            let sha512_db = match &fd.sha512 {
+                Some(s) => String::from(s),
+                _ => String::from(""),
+            };
+
+            if fd.directory_id == p.d_id
+                && fd.filename == dr.target
+                && size_db == dr.length
+                && timestamp_db == dr.timestamp
+                && sha1_db == dr.sha1_sum
+                && md5_db == dr.md5_sum
+                && sha256_db == dr.sha256_sum
+                && sha512_db == dr.sha512_sum
+            {
+                found_in_db = true;
+            }
+        }
+
+        if !found_in_db {
+            p.ifds.push(db::models::InsertFileDetail {
+                directory_id: p.d_id,
+                filename: dr.target.to_string(),
+                timestamp: Some(dr.timestamp),
+                size: Some(dr.length),
+                sha1: Some(dr.sha1_sum),
+                md5: Some(dr.md5_sum),
+                sha256: Some(dr.sha256_sum),
+                sha512: Some(dr.sha512_sum),
+            });
+        }
     }
 
     Ok(())
@@ -723,6 +793,32 @@ fn find_repositories(p: &mut FindRepositories) -> Result<usize, Box<dyn Error>> 
 
     let list: Vec<String> = p.cds.keys().cloned().collect();
     'outer: for k in list {
+        // No need to look at unchanged entries
+        if !p.cds.get(&k).unwrap().ctime_changed {
+            continue;
+        }
+        // Let's go over the files in this directory to see if there
+        // is a file ending with '-CHECKSUM' which might contain
+        // checksums.
+        for f in &p.cds.get(&k).unwrap().files {
+            // Currently only files ending in '-CHECKSUM' exist
+            if f.name.ends_with("-CHECKSUM") {
+                // We found such a file. Now let's parse it and add it
+                // to 'ifds' to be later added to the database.
+                println!("Found CHECKSUM {}", f.name);
+                fill_ifds(&mut FillIfds {
+                    ifds: &mut ifds,
+                    target: &f.name,
+                    backend: &p.backend,
+                    checksum_base: &p.checksum_base,
+                    topdir: &p.top,
+                    dir: &k,
+                    d_id: p.cds[&k].directory_id,
+                    fds: &fds,
+                    files: &Some(p.cds.get(&k).unwrap().files.clone()),
+                })?;
+            }
+        }
         if basename(k.to_string()) == *"repodata" {
             for s in p.skip_repository_paths {
                 if k.contains(s) {
@@ -732,10 +828,6 @@ fn find_repositories(p: &mut FindRepositories) -> Result<usize, Box<dyn Error>> 
             let parent = String::from(Path::new(&k).parent().unwrap().to_str().unwrap());
             // 'parent' should always be a key of cds
             let cd = p.cds.get(&parent).unwrap();
-            // No need to look at unchanged entries
-            if !p.cds.get(&k).unwrap().ctime_changed {
-                continue;
-            }
             let with_topdir = match parent.is_empty() {
                 true => p.top.clone(),
                 false => format!("{}{}", p.top, parent),
@@ -780,12 +872,14 @@ fn find_repositories(p: &mut FindRepositories) -> Result<usize, Box<dyn Error>> 
 
             fill_ifds(&mut FillIfds {
                 ifds: &mut ifds,
+                target: "repomd.xml",
                 backend: &p.backend,
                 checksum_base: &p.checksum_base,
                 topdir: &p.top,
                 dir: &k,
                 d_id: p.cds[&k].directory_id,
                 fds: &fds,
+                files: &None,
             })?;
         }
     }
@@ -1039,7 +1133,7 @@ fn sync_category_directories(
                         entry.dir.readable = cd.readable;
                     }
                     if readable_changed || ctime_changed {
-                        let json = short_filelist(&cd);
+                        let json = short_filelist(cd);
                         if d.files != json.as_bytes() {
                             entry.dir.files = json.as_bytes().to_vec();
                             entry.files_changed = true;
