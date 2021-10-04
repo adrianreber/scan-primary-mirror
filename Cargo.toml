@@ -18,7 +18,7 @@ serde_json = "1"
 derivative = "2.2.0"
 config = { version = "0.11", features = ["toml"] }
 reqwest = { version = "0.11.4", features = ["blocking"] }
-serde-xml-rs = "0.5.0"
+serde-xml-rs = "0.5.1"
 md-5 = "0.9.1"
 sha-1 = "0.9.8"
 sha2 = "0.9.8"
