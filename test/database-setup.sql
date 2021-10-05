@@ -40,3 +40,9 @@ CREATE TABLE version (
     sortorder integer NOT NULL,
     codename text
 );
+
+DROP TABLE arch;
+CREATE TABLE arch (
+    id serial NOT NULL,
+    name text
+);
