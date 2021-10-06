@@ -654,7 +654,7 @@ struct FillIfds<'a> {
 }
 
 fn fill_ifds(p: &mut FillIfds) -> Result<(), Box<dyn Error>> {
-    let drs = match p.backend {
+    let drs_result = match p.backend {
         "rsync" | "directory" if p.target.ends_with("-CHECKSUM") => get_details_via_checksum_file(
             p.checksum_base,
             p.topdir,
@@ -662,11 +662,20 @@ fn fill_ifds(p: &mut FillIfds) -> Result<(), Box<dyn Error>> {
             p.target,
             p.backend,
             p.files,
-        )?,
-        "rsync" | "directory" => {
-            get_details(p.checksum_base, p.topdir, p.dir, p.target, p.backend)?
-        }
+        ),
+        "rsync" | "directory" => get_details(p.checksum_base, p.topdir, p.dir, p.target, p.backend),
         _ => return Err(format!("Unsupported scan backend '{}'", p.backend).into()),
+    };
+
+    let drs = match drs_result {
+        Ok(d) => d,
+        Err(e) => {
+            println!(
+                "Getting file details for {} via {} failed: {}. Skipping.",
+                p.target, p.backend, e
+            );
+            return Ok(());
+        }
     };
 
     for dr in drs {
@@ -859,15 +868,21 @@ fn find_repositories(p: &mut FindRepositories) -> Result<usize, Box<dyn Error>> 
                 println!("Not able to determine prefix for {}", with_topdir.clone());
             }
             if !check_for_repo(p.repos, prefix.clone(), arch_id) {
-                db::functions::create_repository(
+                if let Err(e) = db::functions::create_repository(
                     p.c,
                     cd.directory_id,
                     with_topdir,
                     p.cat.id,
                     version_id,
                     arch_id,
-                    prefix,
-                )?;
+                    prefix.clone(),
+                ) {
+                    println!(
+                        "Repository creation failed for {}: {}. Skipping.",
+                        prefix, e
+                    );
+                    continue;
+                }
             }
 
             fill_ifds(&mut FillIfds {
