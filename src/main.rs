@@ -358,7 +358,16 @@ fn repo_prefix(
             if version == *"rawhide" {
                 return format!("{}-{}{}", rm.prefix, version, is_source_or_debug);
             } else {
-                let mut prefix = format!("{}{}-", rm.prefix, is_source_or_debug);
+                let mut prefix = format!(
+                    "{}{}-",
+                    match rm.prefix.contains('$') {
+                        // A '$' means that this contains a replacement group. Probably.
+                        true => pattern.replace(&path, rm.prefix.clone()).to_string(),
+                        _ => rm.prefix.clone(),
+                    },
+                    is_source_or_debug
+                );
+
                 for a in aliases {
                     if prefix == a.from {
                         prefix = a.to.clone();
