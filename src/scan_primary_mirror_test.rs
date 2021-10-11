@@ -49,6 +49,10 @@ fn get_version_from_path_test() {
         "1030",
         get_version_from_path("top/development/1030/os".to_string())
     );
+    assert_eq!(
+        "9-stream",
+        get_version_from_path("SIGs/9-stream/infra/x86_64/infra-common/".to_string())
+    );
 }
 
 #[test]
@@ -118,7 +122,40 @@ fn repo_prefix_test() {
             regex: "^path/fedora/updates/testing/[\\.\\d]+/.*".to_string(),
             prefix: "fedora-updates-testing".to_string(),
         },
+        settings::RepositoryMapping {
+            regex:
+                "^SIGs/\\d+(?:-stream)?/(?P<signame>\\S+?)/(?P<arch>\\S+?)/(?P<sigrepo>\\S+?)/.*"
+                    .to_string(),
+            prefix: "centos-${signame}-sig-${sigrepo}".to_string(),
+        },
     ];
+    assert_eq!(
+        "centos-infra-sig-infra-common-9-stream",
+        repo_prefix(
+            "SIGs/9-stream/infra/x86_64/infra-common/repodata".to_string(),
+            "9-stream".to_string(),
+            &rms,
+            &aliases
+        )
+    );
+    assert_eq!(
+        "centos-infra-sig-infra-common-debug-9-stream",
+        repo_prefix(
+            "SIGs/9-stream/infra/x86_64/infra-common/debug/repodata".to_string(),
+            "9-stream".to_string(),
+            &rms,
+            &aliases
+        )
+    );
+    assert_eq!(
+        "centos-infra-sig-infra-common-source-9-stream",
+        repo_prefix(
+            "SIGs/9-stream/infra/source/infra-common/Packages".to_string(),
+            "9-stream".to_string(),
+            &rms,
+            &aliases
+        )
+    );
     assert_eq!(
         "",
         repo_prefix(
