@@ -525,6 +525,9 @@ fn get_file_content(
         target,
     );
 
+    debug::STEPS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    debug::print_step(format!("Reading {} for checksum creation", full_target));
+
     if backend == "directory" {
         return Ok((
             fs::read_to_string(&full_target)?,
