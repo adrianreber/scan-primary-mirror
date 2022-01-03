@@ -1314,7 +1314,7 @@ fn scan_local_directory(
     debug::print_step(format!("Local directory ({}) scan", url));
     WalkDir::new(url)
         .into_iter()
-        .filter_entry(|e| is_not_hidden(e))
+        .filter_entry(is_not_hidden)
         .filter_map(|v| v.ok())
         .map(|info| FileInfo {
             is_directory: info.file_type().is_dir(),
