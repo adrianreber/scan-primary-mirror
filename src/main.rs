@@ -356,7 +356,7 @@ fn repo_prefix(
 
         if pattern.is_match(&path) {
             if version == *"rawhide" {
-                return format!("{}-{}{}", rm.prefix, version, is_source_or_debug);
+                return format!("{}{}", rm.prefix, is_source_or_debug);
             } else {
                 let mut prefix = format!(
                     "{}{}-",
