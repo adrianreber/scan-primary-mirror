@@ -57,6 +57,9 @@ pub struct Category {
     pub checksum_base: Option<String>,
     /// excludes: comma separated list of regex for directories to exclude
     pub excludes: Option<Vec<String>>,
+    /// version_prefix: optional prefix for version in the resulting
+    /// repository prefix. f35 instead of 35
+    pub version_prefix: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

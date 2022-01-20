@@ -67,7 +67,7 @@ fn repo_prefix_test() {
     }];
     assert_eq!(
         "",
-        repo_prefix("path".to_string(), "76".to_string(), &rms, &aliases)
+        repo_prefix("path".to_string(), "76".to_string(), &rms, &aliases, None)
     );
     rms = vec![settings::RepositoryMapping {
         regex: "path".to_string(),
@@ -75,7 +75,17 @@ fn repo_prefix_test() {
     }];
     assert_eq!(
         "some-76",
-        repo_prefix("path".to_string(), "76".to_string(), &rms, &aliases)
+        repo_prefix("path".to_string(), "76".to_string(), &rms, &aliases, None)
+    );
+    assert_eq!(
+        "some-f76",
+        repo_prefix(
+            "path".to_string(),
+            "76".to_string(),
+            &rms,
+            &aliases,
+            Some(&"f".to_string())
+        )
     );
     assert_eq!(
         "some-source-76",
@@ -83,7 +93,8 @@ fn repo_prefix_test() {
             "path/SRPMS/debug".to_string(),
             "76".to_string(),
             &rms,
-            &aliases
+            &aliases,
+            None,
         )
     );
     assert_eq!(
@@ -92,7 +103,8 @@ fn repo_prefix_test() {
             "path/source/repodata".to_string(),
             "76".to_string(),
             &rms,
-            &aliases
+            &aliases,
+            None,
         )
     );
     assert_eq!(
@@ -101,7 +113,8 @@ fn repo_prefix_test() {
             "path/src/repodata".to_string(),
             "76".to_string(),
             &rms,
-            &aliases
+            &aliases,
+            None,
         )
     );
     assert_eq!(
@@ -110,7 +123,8 @@ fn repo_prefix_test() {
             "path/debug/os".to_string(),
             "76".to_string(),
             &rms,
-            &aliases
+            &aliases,
+            None,
         )
     );
     rms = vec![
@@ -135,7 +149,8 @@ fn repo_prefix_test() {
             "SIGs/9-stream/infra/x86_64/infra-common/repodata".to_string(),
             "9-stream".to_string(),
             &rms,
-            &aliases
+            &aliases,
+            None,
         )
     );
     assert_eq!(
@@ -144,7 +159,8 @@ fn repo_prefix_test() {
             "SIGs/9-stream/infra/x86_64/infra-common/debug/repodata".to_string(),
             "9-stream".to_string(),
             &rms,
-            &aliases
+            &aliases,
+            None
         )
     );
     assert_eq!(
@@ -153,7 +169,8 @@ fn repo_prefix_test() {
             "SIGs/9-stream/infra/source/infra-common/Packages".to_string(),
             "9-stream".to_string(),
             &rms,
-            &aliases
+            &aliases,
+            None,
         )
     );
     assert_eq!(
@@ -162,7 +179,8 @@ fn repo_prefix_test() {
             "path/debug/os".to_string(),
             "76".to_string(),
             &rms,
-            &aliases
+            &aliases,
+            None,
         )
     );
     assert_eq!(
@@ -171,7 +189,8 @@ fn repo_prefix_test() {
             "path/fedora/updates".to_string(),
             "76".to_string(),
             &rms,
-            &aliases
+            &aliases,
+            None,
         )
     );
     assert_eq!(
@@ -181,6 +200,7 @@ fn repo_prefix_test() {
             "76".to_string(),
             &rms,
             &aliases,
+            None,
         )
     );
     assert_eq!(
@@ -190,6 +210,7 @@ fn repo_prefix_test() {
             "76".to_string(),
             &rms,
             &aliases,
+            None,
         )
     );
     aliases = vec![settings::RepositoryAlias {
@@ -203,6 +224,7 @@ fn repo_prefix_test() {
             "76".to_string(),
             &rms,
             &aliases,
+            None,
         )
     );
 }
@@ -1123,6 +1145,7 @@ fn find_repositories_test() {
         do_not_display_paths: &["skip".to_string()],
         backend: "rsync".to_string(),
         aliases: &aliases,
+        version_prefix: None,
     };
     if let Err(e) = find_repositories(&mut find_parameter) {
         println!("Creating repositories in database failed {}", e);
