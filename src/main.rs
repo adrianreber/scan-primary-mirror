@@ -336,6 +336,7 @@ fn repo_prefix(
     version: String,
     rms: &[settings::RepositoryMapping],
     aliases: &[settings::RepositoryAlias],
+    version_prefix: Option<&String>,
 ) -> String {
     let mut is_source_or_debug = String::new();
 
@@ -373,7 +374,13 @@ fn repo_prefix(
                         prefix = a.to.clone();
                     }
                 }
-                return format!("{}{}", prefix, version);
+
+                let version_with_prefix = match version_prefix {
+                    Some(vp) => format!("{}{}", vp, version),
+                    _ => version,
+                };
+
+                return format!("{}{}", prefix, version_with_prefix);
             }
         }
     }
@@ -795,6 +802,8 @@ struct FindRepositories<'a> {
     /// List of Repository aliases for some repositories not
     /// following the default naming scheme.
     aliases: &'a [settings::RepositoryAlias],
+    /// Optional version prefix for: 35 -> f35
+    version_prefix: Option<String>,
 }
 
 /// Find repositories in the list of scanned directories.
@@ -875,7 +884,13 @@ fn find_repositories(p: &mut FindRepositories) -> Result<usize, Box<dyn Error>> 
                 println!("Not creating repository in database");
                 continue;
             }
-            let prefix = repo_prefix(with_topdir.clone(), version_name, p.rms, p.aliases);
+            let prefix = repo_prefix(
+                with_topdir.clone(),
+                version_name,
+                p.rms,
+                p.aliases,
+                p.version_prefix.as_ref(),
+            );
             if prefix.is_empty() {
                 println!("Not able to determine prefix for {}", with_topdir.clone());
             }
@@ -1679,6 +1694,7 @@ fn main() {
         do_not_display_paths: &do_not_display_paths,
         backend: config_file_category.r#type,
         aliases: &repository_aliases,
+        version_prefix: config_file_category.version_prefix,
     };
     if let Err(e) = find_repositories(&mut find_parameter) {
         println!("Creating repositories in database failed {}", e);
