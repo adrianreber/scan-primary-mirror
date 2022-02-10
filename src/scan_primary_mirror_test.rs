@@ -60,6 +60,7 @@ fn repo_prefix_test() {
     let mut rms = vec![settings::RepositoryMapping {
         regex: "[(^^^^".to_string(),
         prefix: "some".to_string(),
+        version_prefix: None,
     }];
     let mut aliases = vec![settings::RepositoryAlias {
         from: "testing-modular-epel-debug-".to_string(),
@@ -67,25 +68,16 @@ fn repo_prefix_test() {
     }];
     assert_eq!(
         "",
-        repo_prefix("path".to_string(), "76".to_string(), &rms, &aliases, None)
+        repo_prefix("path".to_string(), "76".to_string(), &rms, &aliases)
     );
     rms = vec![settings::RepositoryMapping {
         regex: "path".to_string(),
         prefix: "some".to_string(),
+        version_prefix: None,
     }];
     assert_eq!(
         "some-76",
-        repo_prefix("path".to_string(), "76".to_string(), &rms, &aliases, None)
-    );
-    assert_eq!(
-        "some-f76",
-        repo_prefix(
-            "path".to_string(),
-            "76".to_string(),
-            &rms,
-            &aliases,
-            Some(&"f".to_string())
-        )
+        repo_prefix("path".to_string(), "76".to_string(), &rms, &aliases)
     );
     assert_eq!(
         "some-source-76",
@@ -94,7 +86,6 @@ fn repo_prefix_test() {
             "76".to_string(),
             &rms,
             &aliases,
-            None,
         )
     );
     assert_eq!(
@@ -104,7 +95,6 @@ fn repo_prefix_test() {
             "76".to_string(),
             &rms,
             &aliases,
-            None,
         )
     );
     assert_eq!(
@@ -114,7 +104,6 @@ fn repo_prefix_test() {
             "76".to_string(),
             &rms,
             &aliases,
-            None,
         )
     );
     assert_eq!(
@@ -124,23 +113,34 @@ fn repo_prefix_test() {
             "76".to_string(),
             &rms,
             &aliases,
-            None,
         )
+    );
+    rms = vec![settings::RepositoryMapping {
+        regex: "path".to_string(),
+        prefix: "some".to_string(),
+        version_prefix: Some("f".to_string()),
+    }];
+    assert_eq!(
+        "some-f76",
+        repo_prefix("path".to_string(), "76".to_string(), &rms, &aliases,)
     );
     rms = vec![
         settings::RepositoryMapping {
             regex: "^path/fedora/updates/[\\.\\d]+/.*".to_string(),
             prefix: "fedora-updates-released".to_string(),
+            version_prefix: None,
         },
         settings::RepositoryMapping {
             regex: "^path/fedora/updates/testing/[\\.\\d]+/.*".to_string(),
             prefix: "fedora-updates-testing".to_string(),
+            version_prefix: None,
         },
         settings::RepositoryMapping {
             regex:
                 "^SIGs/\\d+(?:-stream)?/(?P<signame>\\S+?)/(?P<arch>\\S+?)/(?P<sigrepo>\\S+?)/.*"
                     .to_string(),
             prefix: "centos-${signame}-sig-${sigrepo}".to_string(),
+            version_prefix: None,
         },
     ];
     assert_eq!(
@@ -150,7 +150,6 @@ fn repo_prefix_test() {
             "9-stream".to_string(),
             &rms,
             &aliases,
-            None,
         )
     );
     assert_eq!(
@@ -160,7 +159,6 @@ fn repo_prefix_test() {
             "9-stream".to_string(),
             &rms,
             &aliases,
-            None
         )
     );
     assert_eq!(
@@ -170,7 +168,6 @@ fn repo_prefix_test() {
             "9-stream".to_string(),
             &rms,
             &aliases,
-            None,
         )
     );
     assert_eq!(
@@ -180,7 +177,6 @@ fn repo_prefix_test() {
             "76".to_string(),
             &rms,
             &aliases,
-            None,
         )
     );
     assert_eq!(
@@ -190,7 +186,6 @@ fn repo_prefix_test() {
             "76".to_string(),
             &rms,
             &aliases,
-            None,
         )
     );
     assert_eq!(
@@ -200,7 +195,6 @@ fn repo_prefix_test() {
             "76".to_string(),
             &rms,
             &aliases,
-            None,
         )
     );
     assert_eq!(
@@ -210,7 +204,6 @@ fn repo_prefix_test() {
             "76".to_string(),
             &rms,
             &aliases,
-            None,
         )
     );
     aliases = vec![settings::RepositoryAlias {
@@ -224,7 +217,6 @@ fn repo_prefix_test() {
             "76".to_string(),
             &rms,
             &aliases,
-            None,
         )
     );
 }
@@ -716,7 +708,7 @@ fn guess_ver_arch_from_path_test_with_rawhide() {
     let test_paths: Vec<String> = Vec::new();
     let do_not_display_paths: Vec<String> = Vec::new();
 
-    let result = match guess_ver_arch_from_path(
+    let mut result = match guess_ver_arch_from_path(
         &c,
         "path/development/unexp/rawhide/something".to_string(),
         &arches,
@@ -733,6 +725,25 @@ fn guess_ver_arch_from_path_test_with_rawhide() {
     };
 
     assert_eq!("rawhide".to_string(), result.0);
+    assert_eq!(43, result.2);
+
+    result = match guess_ver_arch_from_path(
+        &c,
+        "path/development/93/unexp/something".to_string(),
+        &arches,
+        &mut versions,
+        87,
+        &test_paths,
+        &do_not_display_paths,
+    ) {
+        Ok(r) => r,
+        Err(e) => {
+            println!("{}", e);
+            panic!();
+        }
+    };
+
+    assert_eq!("93".to_string(), result.0);
     assert_eq!(43, result.2);
 
     // clean tables after test
@@ -1122,6 +1133,7 @@ fn find_repositories_test() {
     let rms = vec![settings::RepositoryMapping {
         regex: "[(^^^^".to_string(),
         prefix: "some".to_string(),
+        version_prefix: None,
     }];
 
     let mut fds = db::functions::get_file_details(&c);
@@ -1145,7 +1157,6 @@ fn find_repositories_test() {
         do_not_display_paths: &["skip".to_string()],
         backend: "rsync".to_string(),
         aliases: &aliases,
-        version_prefix: None,
     };
     if let Err(e) = find_repositories(&mut find_parameter) {
         println!("Creating repositories in database failed {}", e);
