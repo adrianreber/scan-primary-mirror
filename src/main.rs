@@ -261,19 +261,20 @@ fn guess_ver_arch_from_path(
     }
 
     for v in versions.clone() {
-        let pattern = Regex::new(format!(r".*(^|/){}(/|$).*", &v.name).as_str()).unwrap();
+        // This, just like the SRPMS <-> source connection above is a bit
+        // unfortunate and hard coded for now. Can easily be pulled into
+        // the configuration file if necessary.
+        // In the database the version is called 'development' but the
+        // repository prefix uses 'rawhide' as the version string.
+        let v_name = match v.name.as_str() {
+            "development" => "rawhide".to_string(),
+            _ => v.name,
+        };
+        let pattern = Regex::new(format!(r".*(^|/){}(/|$).*", v_name).as_str()).unwrap();
         if pattern.is_match(&path) && product_id == v.product_id {
             version_id = v.id;
-            if v.name == *"development" {
-                // This, just like the SRPMS <-> source connection above is a bit
-                // unfortunate and hard coded for now. Can easily be pulled into
-                // the configuration file if necessary.
-                // In the database the version is called 'development' but the
-                // repository prefix uses 'rawhide' as the version string.
-                version_name = "rawhide".to_string();
-            } else {
-                version_name = v.name;
-            }
+            version_name = v_name;
+            break;
         }
     }
 
@@ -336,7 +337,6 @@ fn repo_prefix(
     version: String,
     rms: &[settings::RepositoryMapping],
     aliases: &[settings::RepositoryAlias],
-    version_prefix: Option<&String>,
 ) -> String {
     let mut is_source_or_debug = String::new();
 
@@ -375,7 +375,7 @@ fn repo_prefix(
                     }
                 }
 
-                let version_with_prefix = match version_prefix {
+                let version_with_prefix = match &rm.version_prefix {
                     Some(vp) => format!("{}{}", vp, version),
                     _ => version,
                 };
@@ -802,8 +802,6 @@ struct FindRepositories<'a> {
     /// List of Repository aliases for some repositories not
     /// following the default naming scheme.
     aliases: &'a [settings::RepositoryAlias],
-    /// Optional version prefix for: 35 -> f35
-    version_prefix: Option<String>,
 }
 
 /// Find repositories in the list of scanned directories.
@@ -884,13 +882,7 @@ fn find_repositories(p: &mut FindRepositories) -> Result<usize, Box<dyn Error>> 
                 println!("Not creating repository in database");
                 continue;
             }
-            let prefix = repo_prefix(
-                with_topdir.clone(),
-                version_name,
-                p.rms,
-                p.aliases,
-                p.version_prefix.as_ref(),
-            );
+            let prefix = repo_prefix(with_topdir.clone(), version_name, p.rms, p.aliases);
             if prefix.is_empty() {
                 println!("Not able to determine prefix for {}", with_topdir.clone());
             }
@@ -1694,7 +1686,6 @@ fn main() {
         do_not_display_paths: &do_not_display_paths,
         backend: config_file_category.r#type,
         aliases: &repository_aliases,
-        version_prefix: config_file_category.version_prefix,
     };
     if let Err(e) = find_repositories(&mut find_parameter) {
         println!("Creating repositories in database failed {}", e);
