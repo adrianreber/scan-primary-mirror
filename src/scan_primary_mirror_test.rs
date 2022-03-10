@@ -279,9 +279,9 @@ fn age_file_details_test() {
         },
     ];
 
-    assert!(!diesel::delete(db::schema::file_detail::dsl::file_detail)
+    assert!(diesel::delete(db::schema::file_detail::dsl::file_detail)
         .execute(&c)
-        .is_err());
+        .is_ok());
 
     let five = chrono::offset::Local::now().timestamp() - (60 * 60 * 24 * 5) + 1000;
     let four = chrono::offset::Local::now().timestamp() - (60 * 60 * 24 * 4) + 1000;
@@ -424,16 +424,16 @@ fn sync_category_directories_test() {
 
     // clean tables for test
     assert!(
-        !diesel::delete(db::schema::category_directory::dsl::category_directory)
+        diesel::delete(db::schema::category_directory::dsl::category_directory)
             .execute(&c)
-            .is_err()
+            .is_ok()
     );
-    assert!(!diesel::delete(db::schema::file_detail::dsl::file_detail)
+    assert!(diesel::delete(db::schema::file_detail::dsl::file_detail)
         .execute(&c)
-        .is_err());
-    assert!(!diesel::delete(db::schema::directory::dsl::directory)
+        .is_ok());
+    assert!(diesel::delete(db::schema::directory::dsl::directory)
         .execute(&c)
-        .is_err());
+        .is_ok());
 
     // this is empty
     let mut dirs = db::functions::get_directories(&c, 37);
@@ -449,9 +449,7 @@ fn sync_category_directories_test() {
 
     cds.insert("directory1".to_string(), cd1.clone());
 
-    assert!(
-        !sync_category_directories(&c, "topdir/".to_string(), 37, &mut dirs, &mut cds).is_err()
-    );
+    assert!(sync_category_directories(&c, "topdir/".to_string(), 37, &mut dirs, &mut cds).is_ok());
     // now it should contain the entry from above
     assert_eq!(dirs.len(), 1);
     assert_eq!(dirs[0].ctime, 1000);
@@ -468,9 +466,7 @@ fn sync_category_directories_test() {
     cd1.ctime = 2000;
     cds = HashMap::new();
     cds.insert("directory1".to_string(), cd1);
-    assert!(
-        !sync_category_directories(&c, "topdir/".to_string(), 37, &mut dirs, &mut cds).is_err()
-    );
+    assert!(sync_category_directories(&c, "topdir/".to_string(), 37, &mut dirs, &mut cds).is_ok());
     dirs = db::functions::get_directories(&c, 37);
     assert_eq!(dirs.len(), 1);
     // this should have been updated
@@ -524,9 +520,9 @@ fn guess_ver_arch_from_path_test() {
     };
 
     // clean tables for test
-    assert!(!diesel::delete(db::schema::version::dsl::version)
+    assert!(diesel::delete(db::schema::version::dsl::version)
         .execute(&c)
-        .is_err());
+        .is_ok());
 
     let arches = vec![db::models::Arch {
         id: 43,
@@ -600,9 +596,9 @@ fn guess_ver_arch_from_path_test() {
     assert_eq!(87, versions[0].product_id);
 
     // clean tables for test
-    assert!(!diesel::delete(db::schema::version::dsl::version)
+    assert!(diesel::delete(db::schema::version::dsl::version)
         .execute(&c)
-        .is_err());
+        .is_ok());
     versions = Vec::new();
 
     test_paths.push("/with/".to_string());
@@ -639,9 +635,9 @@ fn guess_ver_arch_from_path_test() {
     assert_eq!(87, insert_versions[0].product_id);
 
     // clean tables for test
-    assert!(!diesel::delete(db::schema::version::dsl::version)
+    assert!(diesel::delete(db::schema::version::dsl::version)
         .execute(&c)
-        .is_err());
+        .is_ok());
     versions = Vec::new();
     do_not_display_paths = vec!["_Beta".to_string()];
 
@@ -690,9 +686,9 @@ fn guess_ver_arch_from_path_test_with_rawhide() {
     };
 
     // clean tables for test
-    assert!(!diesel::delete(db::schema::version::dsl::version)
+    assert!(diesel::delete(db::schema::version::dsl::version)
         .execute(&c)
-        .is_err());
+        .is_ok());
 
     let arches = vec![db::models::Arch {
         id: 43,
@@ -747,9 +743,9 @@ fn guess_ver_arch_from_path_test_with_rawhide() {
     assert_eq!(43, result.2);
 
     // clean tables after test
-    assert!(!diesel::delete(db::schema::version::dsl::version)
+    assert!(diesel::delete(db::schema::version::dsl::version)
         .execute(&c)
-        .is_err());
+        .is_ok());
 }
 
 #[test]
@@ -1101,9 +1097,9 @@ fn find_repositories_test() {
     };
 
     // clean tables for test
-    assert!(!diesel::delete(db::schema::version::dsl::version)
+    assert!(diesel::delete(db::schema::version::dsl::version)
         .execute(&c)
-        .is_err());
+        .is_ok());
 
     let mut cds: HashMap<String, CategoryDirectory> = HashMap::new();
     if scan_with_rsync(&mut cds, &[], "", &[], &[], "test").is_err() {

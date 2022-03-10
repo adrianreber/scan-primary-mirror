@@ -1,4 +1,5 @@
 use config::{Config, ConfigError, Environment, File};
+use serde_derive::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct Database {
@@ -97,9 +98,10 @@ pub struct Settings {
 
 impl Settings {
     pub fn new(config_file: String) -> Result<Self, ConfigError> {
-        let mut s = Config::new();
-        s.merge(File::with_name(&config_file))?;
-        s.merge(Environment::with_prefix("UMDL").separator("__"))?;
-        s.try_into()
+        let s = Config::builder()
+            .add_source(File::with_name(&config_file))
+            .add_source(Environment::with_prefix("UMDL").separator("__"))
+            .build()?;
+        s.try_deserialize()
     }
 }

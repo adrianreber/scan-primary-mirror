@@ -1033,7 +1033,6 @@ fn short_filelist(cd: &CategoryDirectory) -> String {
     let mut files = cd.files.clone();
     let mut html = 0;
     let mut rpm = 0;
-    let limit: usize;
     let max = 10;
     files.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
     for f in &files {
@@ -1044,11 +1043,11 @@ fn short_filelist(cd: &CategoryDirectory) -> String {
             rpm += 1;
         }
     }
-    if rpm > max || html > max {
-        limit = max;
+    let limit: usize = if rpm > max || html > max {
+        max
     } else {
-        limit = files.len();
-    }
+        files.len()
+    };
     match serde_json::to_string(&files[0..limit]) {
         Ok(j) => j,
         _ => String::new(),
