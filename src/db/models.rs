@@ -71,7 +71,7 @@ pub struct Repository {
     pub disabled: bool,
 }
 
-#[derive(Queryable, Debug, Clone, PartialEq)]
+#[derive(Queryable, Debug, Clone, Eq, PartialEq)]
 pub struct FileDetail {
     pub id: i32,
     pub directory_id: i32,

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 
+#![allow(clippy::extra_unused_lifetimes)]
+
 #[macro_use]
 extern crate prettytable;
 #[macro_use]
@@ -576,7 +578,7 @@ fn get_details(
     let mut sha512 = Sha512::new();
     sha512.update(&body);
 
-    return Ok(vec![DetailsResult {
+    Ok(vec![DetailsResult {
         md5_sum: format!("{:x}", md5.finalize()),
         sha1_sum: format!("{:x}", sha1.finalize()),
         sha256_sum: format!("{:x}", sha256.finalize()),
@@ -584,7 +586,7 @@ fn get_details(
         length: content_length,
         timestamp: xml::get_timestamp(body),
         target: target.to_string(),
-    }]);
+    }])
 }
 
 fn get_details_via_checksum_file(
