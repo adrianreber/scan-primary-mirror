@@ -848,6 +848,18 @@ fn find_repositories(p: &mut FindRepositories) -> Result<usize, Box<dyn Error>> 
             }
         }
         if basename(k.to_string()) == *"repodata" {
+            fill_ifds(&mut FillIfds {
+                ifds: &mut ifds,
+                target: "repomd.xml",
+                backend: &p.backend,
+                checksum_base: &p.checksum_base,
+                topdir: &p.top,
+                dir: &k,
+                d_id: p.cds[&k].directory_id,
+                fds: &fds,
+                files: &None,
+            })?;
+
             for s in p.skip_repository_paths {
                 if k.contains(s) {
                     continue 'outer;
@@ -903,18 +915,6 @@ fn find_repositories(p: &mut FindRepositories) -> Result<usize, Box<dyn Error>> 
                     continue;
                 }
             }
-
-            fill_ifds(&mut FillIfds {
-                ifds: &mut ifds,
-                target: "repomd.xml",
-                backend: &p.backend,
-                checksum_base: &p.checksum_base,
-                topdir: &p.top,
-                dir: &k,
-                d_id: p.cds[&k].directory_id,
-                fds: &fds,
-                files: &None,
-            })?;
         }
     }
 
