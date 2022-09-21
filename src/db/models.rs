@@ -3,8 +3,8 @@ use crate::db::schema::{
 };
 
 #[derive(Queryable, Identifiable, Associations)]
-#[belongs_to(Directory, foreign_key = "topdir_id")]
-#[table_name = "category"]
+#[diesel(belongs_to(Directory, foreign_key = topdir_id))]
+#[diesel(table_name = category)]
 pub struct Category {
     pub id: i32,
     pub name: String,
@@ -13,7 +13,7 @@ pub struct Category {
 }
 
 #[derive(Queryable, Identifiable, Clone, Debug)]
-#[table_name = "directory"]
+#[diesel(table_name = directory)]
 pub struct Directory {
     pub id: i32,
     pub name: String,
@@ -23,9 +23,9 @@ pub struct Directory {
 }
 
 #[derive(Queryable, Identifiable)]
-#[primary_key(category_id)]
-#[primary_key(directory_id)]
-#[table_name = "category_directory"]
+#[diesel(primary_key(category_id))]
+#[diesel(primary_key(directory_id))]
+#[diesel(table_name = category_directory)]
 pub struct CategoryDirectory {
     pub category_id: i32,
     pub directory_id: i32,
@@ -38,7 +38,7 @@ pub struct Arch {
 }
 
 #[derive(Queryable, Identifiable, Debug, Clone)]
-#[table_name = "version"]
+#[diesel(table_name = version)]
 pub struct Version {
     pub id: i32,
     pub name: String,
@@ -47,7 +47,7 @@ pub struct Version {
 }
 
 #[derive(Queryable, Identifiable, Debug)]
-#[table_name = "version"]
+#[diesel(table_name = version)]
 pub struct InsertVersion {
     pub id: i32,
     pub name: String,
@@ -59,7 +59,7 @@ pub struct InsertVersion {
 }
 
 #[derive(Queryable, Identifiable, Debug)]
-#[table_name = "repository"]
+#[diesel(table_name = repository)]
 pub struct Repository {
     pub id: i32,
     pub name: String,
@@ -85,7 +85,7 @@ pub struct FileDetail {
 }
 
 #[derive(Insertable, Debug)]
-#[table_name = "file_detail"]
+#[diesel(table_name = file_detail)]
 pub struct InsertFileDetail {
     pub directory_id: i32,
     pub filename: String,

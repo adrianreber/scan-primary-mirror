@@ -107,7 +107,7 @@ struct UpdateDirectory {
 /// The aged file_detail entries will directly be deleted from the
 /// database. `fds` will not be updated to reflect the missing entries.
 fn age_file_details(
-    c: &PgConnection,
+    c: &mut PgConnection,
     fds: &mut Vec<db::models::FileDetail>,
     dirs: &[db::models::Directory],
     max_stale_days: i64,
@@ -228,7 +228,7 @@ fn get_version_from_path(path: String) -> String {
 /// to the database and to the parameter `versions`. This way the
 /// database has not to be contacted to update `versions`.
 fn guess_ver_arch_from_path(
-    c: &PgConnection,
+    c: &mut PgConnection,
     path: String,
     arches: &[db::models::Arch],
     versions: &mut Vec<db::models::Version>,
@@ -419,7 +419,7 @@ fn check_for_repo(repos: &[db::models::Repository], prefix: String, arch_id: i32
 /// system it will be removed from `category_directory`, `host_category_dir`, `directory`,
 /// `repository' and `file_detail`.
 fn cleanup_database(
-    c: &PgConnection,
+    c: &mut PgConnection,
     cds: &HashMap<String, CategoryDirectory>,
     dirs: &[db::models::Directory],
     topdir: String,
@@ -767,7 +767,7 @@ fn fill_ifds(p: &mut FillIfds) -> Result<(), Box<dyn Error>> {
 /// Parameter for the `find_repositories()` function.
 struct FindRepositories<'a> {
     /// The connection to the database
-    c: &'a PgConnection,
+    c: &'a mut PgConnection,
     /// The hashmap of the file system scan
     cds: &'a mut HashMap<String, CategoryDirectory>,
     /// For rsync based scans a HTTP(S) URL where files can
@@ -1057,14 +1057,14 @@ fn short_filelist(cd: &CategoryDirectory) -> String {
 }
 
 fn update_category_directory(
-    c: &PgConnection,
+    c: &mut PgConnection,
     uc: &[db::models::Directory],
     cat_id: i32,
 ) -> Result<usize, diesel::result::Error> {
     use db::schema::category_directory;
     use db::schema::category_directory::dsl::*;
     #[derive(Insertable)]
-    #[table_name = "category_directory"]
+    #[diesel(table_name = category_directory)]
     struct InsertCategoryDirectory<'a> {
         category_id: &'a i32,
         directory_id: &'a i32,
@@ -1088,7 +1088,7 @@ fn update_category_directory(
 }
 
 fn add_directories(
-    c: &PgConnection,
+    c: &mut PgConnection,
     ad: &HashMap<String, CategoryDirectory>,
     cat_id: i32,
 ) -> Result<Vec<db::models::Directory>, diesel::result::Error> {
@@ -1100,7 +1100,7 @@ fn add_directories(
     use db::schema::directory::dsl::*;
     #[derive(Insertable, Derivative)]
     #[derivative(Debug)]
-    #[table_name = "directory"]
+    #[diesel(table_name = directory)]
     struct InsertDirectory<'a> {
         readable: &'a bool,
         ctime: &'a i64,
@@ -1132,7 +1132,7 @@ fn add_directories(
 }
 
 fn sync_category_directories(
-    c: &PgConnection,
+    c: &mut PgConnection,
     topdir: String,
     cat_id: i32,
     dirs: &mut Vec<db::models::Directory>,
@@ -1209,7 +1209,7 @@ fn sync_category_directories(
         use db::schema::directory::dsl::*;
         #[derive(AsChangeset, Default, Derivative)]
         #[derivative(Debug)]
-        #[table_name = "directory"]
+        #[diesel(table_name = directory)]
         struct UpdateDirectory<'a> {
             readable: Option<&'a bool>,
             ctime: Option<&'a i64>,
@@ -1497,7 +1497,7 @@ fn main() {
         }
     };
 
-    let connection = match PgConnection::establish(&settings.database.url) {
+    let mut connection = match PgConnection::establish(&settings.database.url) {
         Ok(c) => c,
         Err(e) => {
             println!("Connection to the database failed: {}", e);
@@ -1505,7 +1505,7 @@ fn main() {
         }
     };
 
-    let cl = db::functions::get_categories(&connection);
+    let cl = db::functions::get_categories(&mut connection);
 
     if params.list_categories {
         list_categories(&cl);
@@ -1618,16 +1618,20 @@ fn main() {
 
     handle_unreadable(&mut cds);
 
-    let mut d = db::functions::get_directories(&connection, category.id);
+    let mut d = db::functions::get_directories(&mut connection, category.id);
 
-    if let Err(e) =
-        sync_category_directories(&connection, topdir.clone(), category.id, &mut d, &mut cds)
-    {
+    if let Err(e) = sync_category_directories(
+        &mut connection,
+        topdir.clone(),
+        category.id,
+        &mut d,
+        &mut cds,
+    ) {
         println!("Syncing changes to database failed {}", e);
         process::exit(1);
     }
 
-    let repositories = match db::functions::get_repositories(&connection) {
+    let repositories = match db::functions::get_repositories(&mut connection) {
         Ok(r) => r,
         Err(e) => {
             println!("Reading repositories from the database failed: {:#?}", e);
@@ -1660,9 +1664,9 @@ fn main() {
         Some(ex) => ex.to_vec(),
         _ => vec![],
     };
-    let mut fds = db::functions::get_file_details(&connection);
+    let mut fds = db::functions::get_file_details(&mut connection);
     let mut find_parameter = FindRepositories {
-        c: &connection,
+        c: &mut connection,
         cds: &mut cds,
         checksum_base: match config_file_category.r#type.as_str() {
             "rsync" => config_file_category.checksum_base,
@@ -1694,7 +1698,7 @@ fn main() {
     }
 
     if let Err(e) = age_file_details(
-        &connection,
+        &mut connection,
         &mut fds,
         &d,
         match settings.max_stale_days {
@@ -1711,7 +1715,7 @@ fn main() {
     }
 
     if params.delete_directories {
-        if let Err(e) = cleanup_database(&connection, &cds, &d, topdir) {
+        if let Err(e) = cleanup_database(&mut connection, &cds, &d, topdir) {
             println!("Database cleanup failed {}", e);
             process::exit(1);
         }
