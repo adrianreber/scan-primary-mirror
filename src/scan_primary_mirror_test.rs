@@ -247,7 +247,7 @@ fn get_db_connection() -> Result<PgConnection, Box<dyn Error>> {
 
 #[test]
 fn age_file_details_test() {
-    let c = match get_db_connection() {
+    let mut c = match get_db_connection() {
         Ok(c) => c,
         Err(e) => {
             println!("Database connection failed {}", e);
@@ -280,7 +280,7 @@ fn age_file_details_test() {
     ];
 
     assert!(diesel::delete(db::schema::file_detail::dsl::file_detail)
-        .execute(&c)
+        .execute(&mut c)
         .is_ok());
 
     let five = chrono::offset::Local::now().timestamp() - (60 * 60 * 24 * 5) + 1000;
@@ -381,40 +381,40 @@ fn age_file_details_test() {
 
     if let Err(e) = diesel::insert_into(db::schema::file_detail::dsl::file_detail)
         .values(&ifds)
-        .execute(&c)
+        .execute(&mut c)
     {
         println!("Database insert failed {}", e);
         panic!();
     }
 
-    let mut fds = db::functions::get_file_details(&c);
-    let fds_org = db::functions::get_file_details(&c);
-    if let Err(e) = age_file_details(&c, &mut fds, &dirs, 6, 5) {
+    let mut fds = db::functions::get_file_details(&mut c);
+    let fds_org = db::functions::get_file_details(&mut c);
+    if let Err(e) = age_file_details(&mut c, &mut fds, &dirs, 6, 5) {
         println!("Running age_file_details() failed {}", e);
         panic!();
     }
     assert!(fds_org
         .iter()
-        .eq(db::functions::get_file_details(&c).iter()));
+        .eq(db::functions::get_file_details(&mut c).iter()));
 
-    fds = db::functions::get_file_details(&c);
-    if let Err(e) = age_file_details(&c, &mut fds, &dirs, 4, 3) {
+    fds = db::functions::get_file_details(&mut c);
+    if let Err(e) = age_file_details(&mut c, &mut fds, &dirs, 4, 3) {
         println!("Running age_file_details() failed {}", e);
         panic!();
     }
-    assert_eq!(7, db::functions::get_file_details(&c).len());
+    assert_eq!(7, db::functions::get_file_details(&mut c).len());
 
-    fds = db::functions::get_file_details(&c);
-    if let Err(e) = age_file_details(&c, &mut fds, &dirs, 1, 0) {
+    fds = db::functions::get_file_details(&mut c);
+    if let Err(e) = age_file_details(&mut c, &mut fds, &dirs, 1, 0) {
         println!("Running age_file_details() failed {}", e);
         panic!();
     }
-    assert_eq!(6, db::functions::get_file_details(&c).len());
+    assert_eq!(6, db::functions::get_file_details(&mut c).len());
 }
 
 #[test]
 fn sync_category_directories_test() {
-    let c = match get_db_connection() {
+    let mut c = match get_db_connection() {
         Ok(c) => c,
         Err(e) => {
             println!("Database connection failed {}", e);
@@ -425,18 +425,18 @@ fn sync_category_directories_test() {
     // clean tables for test
     assert!(
         diesel::delete(db::schema::category_directory::dsl::category_directory)
-            .execute(&c)
+            .execute(&mut c)
             .is_ok()
     );
     assert!(diesel::delete(db::schema::file_detail::dsl::file_detail)
-        .execute(&c)
+        .execute(&mut c)
         .is_ok());
     assert!(diesel::delete(db::schema::directory::dsl::directory)
-        .execute(&c)
+        .execute(&mut c)
         .is_ok());
 
     // this is empty
-    let mut dirs = db::functions::get_directories(&c, 37);
+    let mut dirs = db::functions::get_directories(&mut c, 37);
     let mut cds: HashMap<String, CategoryDirectory> = HashMap::new();
 
     let mut cd1 = CategoryDirectory {
@@ -449,14 +449,16 @@ fn sync_category_directories_test() {
 
     cds.insert("directory1".to_string(), cd1.clone());
 
-    assert!(sync_category_directories(&c, "topdir/".to_string(), 37, &mut dirs, &mut cds).is_ok());
+    assert!(
+        sync_category_directories(&mut c, "topdir/".to_string(), 37, &mut dirs, &mut cds).is_ok()
+    );
     // now it should contain the entry from above
     assert_eq!(dirs.len(), 1);
     assert_eq!(dirs[0].ctime, 1000);
     assert!(dirs[0].readable);
     assert_eq!(dirs[0].name, "topdir/directory1".to_string());
 
-    dirs = db::functions::get_directories(&c, 37);
+    dirs = db::functions::get_directories(&mut c, 37);
     // test after reading from database
     assert_eq!(dirs.len(), 1);
     assert_eq!(dirs[0].ctime, 1000);
@@ -466,8 +468,10 @@ fn sync_category_directories_test() {
     cd1.ctime = 2000;
     cds = HashMap::new();
     cds.insert("directory1".to_string(), cd1);
-    assert!(sync_category_directories(&c, "topdir/".to_string(), 37, &mut dirs, &mut cds).is_ok());
-    dirs = db::functions::get_directories(&c, 37);
+    assert!(
+        sync_category_directories(&mut c, "topdir/".to_string(), 37, &mut dirs, &mut cds).is_ok()
+    );
+    dirs = db::functions::get_directories(&mut c, 37);
     assert_eq!(dirs.len(), 1);
     // this should have been updated
     assert_eq!(dirs[0].ctime, 2000);
@@ -494,7 +498,7 @@ fn is_excluded_test() {
 }
 
 fn get_insert_versions(
-    c: &PgConnection,
+    c: &mut PgConnection,
 ) -> Result<Vec<db::models::InsertVersion>, diesel::result::Error> {
     use crate::db::schema::version::dsl::*;
     let query = version.select((
@@ -511,7 +515,7 @@ fn get_insert_versions(
 
 #[test]
 fn guess_ver_arch_from_path_test() {
-    let c = match get_db_connection() {
+    let mut c = match get_db_connection() {
         Ok(c) => c,
         Err(e) => {
             println!("Database connection failed {}", e);
@@ -521,7 +525,7 @@ fn guess_ver_arch_from_path_test() {
 
     // clean tables for test
     assert!(diesel::delete(db::schema::version::dsl::version)
-        .execute(&c)
+        .execute(&mut c)
         .is_ok());
 
     let arches = vec![db::models::Arch {
@@ -534,7 +538,7 @@ fn guess_ver_arch_from_path_test() {
     let mut do_not_display_paths: Vec<String> = Vec::new();
 
     match guess_ver_arch_from_path(
-        &c,
+        &mut c,
         "path/with/no/version".to_string(),
         &arches,
         &mut versions,
@@ -547,7 +551,7 @@ fn guess_ver_arch_from_path_test() {
     };
 
     let mut result = match guess_ver_arch_from_path(
-        &c,
+        &mut c,
         "path/with/unexp/version".to_string(),
         &arches,
         &mut versions,
@@ -566,7 +570,7 @@ fn guess_ver_arch_from_path_test() {
     assert_eq!(43, result.2);
 
     result = match guess_ver_arch_from_path(
-        &c,
+        &mut c,
         "path/with/unexp/8.88/something".to_string(),
         &arches,
         &mut versions,
@@ -583,7 +587,7 @@ fn guess_ver_arch_from_path_test() {
 
     assert_eq!("8.88", result.0);
     assert_eq!(43, result.2);
-    versions = match db::functions::get_versions(&c) {
+    versions = match db::functions::get_versions(&mut c) {
         Ok(v) => v,
         Err(e) => {
             println!("{}", e);
@@ -597,13 +601,13 @@ fn guess_ver_arch_from_path_test() {
 
     // clean tables for test
     assert!(diesel::delete(db::schema::version::dsl::version)
-        .execute(&c)
+        .execute(&mut c)
         .is_ok());
     versions = Vec::new();
 
     test_paths.push("/with/".to_string());
     result = match guess_ver_arch_from_path(
-        &c,
+        &mut c,
         "path/with/unexp/8.88/something".to_string(),
         &arches,
         &mut versions,
@@ -621,7 +625,7 @@ fn guess_ver_arch_from_path_test() {
     assert_eq!("8.88", result.0);
     assert_eq!(43, result.2);
 
-    let mut insert_versions = match get_insert_versions(&c) {
+    let mut insert_versions = match get_insert_versions(&mut c) {
         Ok(v) => v,
         Err(e) => {
             println!("{}", e);
@@ -636,14 +640,14 @@ fn guess_ver_arch_from_path_test() {
 
     // clean tables for test
     assert!(diesel::delete(db::schema::version::dsl::version)
-        .execute(&c)
+        .execute(&mut c)
         .is_ok());
     versions = Vec::new();
     do_not_display_paths = vec!["_Beta".to_string()];
 
     test_paths.push("/with/".to_string());
     result = match guess_ver_arch_from_path(
-        &c,
+        &mut c,
         "path/with/unexp/8.88_Beta/something".to_string(),
         &arches,
         &mut versions,
@@ -661,7 +665,7 @@ fn guess_ver_arch_from_path_test() {
     assert_eq!("8.88_Beta", result.0);
     assert_eq!(43, result.2);
 
-    insert_versions = match get_insert_versions(&c) {
+    insert_versions = match get_insert_versions(&mut c) {
         Ok(v) => v,
         Err(e) => {
             println!("{}", e);
@@ -677,7 +681,7 @@ fn guess_ver_arch_from_path_test() {
 
 #[test]
 fn guess_ver_arch_from_path_test_with_rawhide() {
-    let c = match get_db_connection() {
+    let mut c = match get_db_connection() {
         Ok(c) => c,
         Err(e) => {
             println!("Database connection failed {}", e);
@@ -687,7 +691,7 @@ fn guess_ver_arch_from_path_test_with_rawhide() {
 
     // clean tables for test
     assert!(diesel::delete(db::schema::version::dsl::version)
-        .execute(&c)
+        .execute(&mut c)
         .is_ok());
 
     let arches = vec![db::models::Arch {
@@ -705,7 +709,7 @@ fn guess_ver_arch_from_path_test_with_rawhide() {
     let do_not_display_paths: Vec<String> = Vec::new();
 
     let mut result = match guess_ver_arch_from_path(
-        &c,
+        &mut c,
         "path/development/unexp/rawhide/something".to_string(),
         &arches,
         &mut versions,
@@ -724,7 +728,7 @@ fn guess_ver_arch_from_path_test_with_rawhide() {
     assert_eq!(43, result.2);
 
     result = match guess_ver_arch_from_path(
-        &c,
+        &mut c,
         "path/development/93/unexp/something".to_string(),
         &arches,
         &mut versions,
@@ -744,7 +748,7 @@ fn guess_ver_arch_from_path_test_with_rawhide() {
 
     // clean tables after test
     assert!(diesel::delete(db::schema::version::dsl::version)
-        .execute(&c)
+        .execute(&mut c)
         .is_ok());
 }
 
@@ -1088,7 +1092,7 @@ fn scan_local_directory_test() {
 
 #[test]
 fn find_repositories_test() {
-    let c = match get_db_connection() {
+    let mut c = match get_db_connection() {
         Ok(c) => c,
         Err(e) => {
             println!("Database connection failed {}", e);
@@ -1098,7 +1102,7 @@ fn find_repositories_test() {
 
     // clean tables for test
     assert!(diesel::delete(db::schema::version::dsl::version)
-        .execute(&c)
+        .execute(&mut c)
         .is_ok());
 
     let mut cds: HashMap<String, CategoryDirectory> = HashMap::new();
@@ -1132,14 +1136,14 @@ fn find_repositories_test() {
         version_prefix: None,
     }];
 
-    let mut fds = db::functions::get_file_details(&c);
+    let mut fds = db::functions::get_file_details(&mut c);
     let aliases = vec![settings::RepositoryAlias {
         from: "testing-modular-epel-debug-".to_string(),
         to: "testing-modular-debug-epel".to_string(),
     }];
 
     let mut find_parameter = FindRepositories {
-        c: &c,
+        c: &mut c,
         cds: &mut cds,
         checksum_base: Some("http://localhost:17397/".to_string()),
         top: "".to_string(),

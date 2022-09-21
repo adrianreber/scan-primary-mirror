@@ -17,7 +17,7 @@ pub struct Category {
 /// Retrieve the list of architectures from the database
 ///
 /// Architectures are never added automatically to the database.
-pub fn get_arches(c: &PgConnection) -> Result<Vec<Arch>, diesel::result::Error> {
+pub fn get_arches(c: &mut PgConnection) -> Result<Vec<Arch>, diesel::result::Error> {
     use crate::db::schema::arch::dsl::*;
     let query = arch.select((id, name));
     let debug = diesel::debug_query::<diesel::pg::Pg, _>(&query);
@@ -28,7 +28,7 @@ pub fn get_arches(c: &PgConnection) -> Result<Vec<Arch>, diesel::result::Error> 
 /// Retrieve the existing versions from the database
 ///
 /// If a new version if found that new version will be added to the database
-pub fn get_versions(c: &PgConnection) -> Result<Vec<Version>, diesel::result::Error> {
+pub fn get_versions(c: &mut PgConnection) -> Result<Vec<Version>, diesel::result::Error> {
     use crate::db::schema::version::dsl::*;
     let query = version.select((id, name, product_id, is_test));
     let debug = diesel::debug_query::<diesel::pg::Pg, _>(&query);
@@ -38,7 +38,7 @@ pub fn get_versions(c: &PgConnection) -> Result<Vec<Version>, diesel::result::Er
 
 /// Creates a repository in the database using the given parameters.
 pub fn create_repository(
-    c: &PgConnection,
+    c: &mut PgConnection,
     directory_id: i32,
     with_topdir: String,
     cat_id: i32,
@@ -75,7 +75,7 @@ pub fn create_repository(
 /// for metalinks. There can be multiple entries for a file.
 ///
 /// This table is cleaned during `age_file_details()`.
-pub fn get_file_details(c: &PgConnection) -> Vec<FileDetail> {
+pub fn get_file_details(c: &mut PgConnection) -> Vec<FileDetail> {
     use crate::db::schema::file_detail::dsl::*;
     let query = file_detail.select((
         id,
@@ -100,7 +100,7 @@ pub fn get_file_details(c: &PgConnection) -> Vec<FileDetail> {
 /// Needed during startup to make sure the selected category
 /// actually exists. It is also needed to figure out the topdir
 /// for each category.
-pub fn get_categories(c: &PgConnection) -> Vec<Category> {
+pub fn get_categories(c: &mut PgConnection) -> Vec<Category> {
     use crate::db::schema::category;
     use crate::db::schema::directory;
 
@@ -121,7 +121,7 @@ pub fn get_categories(c: &PgConnection) -> Vec<Category> {
 ///
 /// ctime is the most important parameter to detect if
 /// something has changed on the primary mirror.
-pub fn get_directories(c: &PgConnection, cat_id: i32) -> Vec<Directory> {
+pub fn get_directories(c: &mut PgConnection, cat_id: i32) -> Vec<Directory> {
     use crate::db::schema::category_directory;
     use crate::db::schema::directory;
 
@@ -146,7 +146,7 @@ pub fn get_directories(c: &PgConnection, cat_id: i32) -> Vec<Directory> {
 }
 
 /// This retrieves the list of which directory belongs to given category.
-pub fn _get_category_directories(c: &PgConnection, cat_id: i32) -> Vec<CategoryDirectory> {
+pub fn _get_category_directories(c: &mut PgConnection, cat_id: i32) -> Vec<CategoryDirectory> {
     use crate::db::schema::category_directory;
 
     let query = category_directory::dsl::category_directory
@@ -163,7 +163,7 @@ pub fn _get_category_directories(c: &PgConnection, cat_id: i32) -> Vec<CategoryD
 }
 
 /// Get a list of all repositories MirrorManager knows about.
-pub fn get_repositories(c: &PgConnection) -> Result<Vec<Repository>, diesel::result::Error> {
+pub fn get_repositories(c: &mut PgConnection) -> Result<Vec<Repository>, diesel::result::Error> {
     use crate::db::schema::repository::dsl::*;
 
     let query = repository.select((
