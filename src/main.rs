@@ -548,6 +548,19 @@ fn get_file_content(
         Ok(r) => r,
         Err(e) => return Err(format!("Error '{}' retrieving '{}'", e, full_target).into()),
     };
+
+    {
+        use reqwest::StatusCode;
+
+        if resp.status() != StatusCode::OK {
+            return Err(format!(
+                "Downloading '{}' returned status '{}'",
+                full_target,
+                resp.status()
+            )
+            .into());
+        };
+    }
     let content_length: i64 = match resp.headers().get("content-length") {
         Some(r) => r.to_str()?.parse::<i64>()?,
         _ => 0,
@@ -1248,7 +1261,7 @@ fn handle_unreadable(cds: &mut HashMap<String, CategoryDirectory>) {
     let cds_copy = cds.clone();
 
     for d in cds_keys {
-        let mut cd = match cds.get_mut(&d) {
+        let cd = match cds.get_mut(&d) {
             Some(c) => c,
             _ => continue,
         };
