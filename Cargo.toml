@@ -19,7 +19,7 @@ derivative = "2.2.0"
 config = { version = "0.13", features = ["toml"] }
 reqwest = { version = "0.12.4", default-features = false, features = ["blocking", "rustls-tls"] }
 serde-xml-rs = "0.6.0"
-md-5 = "0.10.5"
+md-5 = "0.10.6"
 sha-1 = "0.10.1"
 sha2 = "0.10.7"
 walkdir = "2"
