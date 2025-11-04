@@ -3,7 +3,7 @@ use std::cmp;
 
 #[derive(Debug, Deserialize)]
 struct Timestamp {
-    #[serde(rename = "$value")]
+    #[serde(rename = "#text")]
     pub value: String,
 }
 #[derive(Debug, Deserialize)]
