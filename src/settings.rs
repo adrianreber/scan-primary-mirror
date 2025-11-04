@@ -69,7 +69,6 @@ pub struct Settings {
     pub common_rsync_options: Option<String>,
     pub max_propagation_days: Option<i64>,
     pub max_stale_days: Option<i64>,
-    pub debug: Option<bool>,
     pub database: Database,
     /// Comma separated list of regex for directories to exclude.
     /// This will be combined with the category specific excludes.
