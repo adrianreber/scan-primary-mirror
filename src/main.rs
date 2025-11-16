@@ -182,11 +182,13 @@ fn age_file_details(
 
 /// Returns a timestamp from rsync `date` and `time`
 fn ctime_from_rsync(date: String, time: String) -> i64 {
-    let dt: i64 =
-        match NaiveDateTime::parse_from_str(format!("{} {}", date, time).as_str(), "%Y/%m/%d %H:%M:%S") {
-            Ok(d) => d.and_utc().timestamp(),
-            Err(_) => -1,
-        };
+    let dt: i64 = match NaiveDateTime::parse_from_str(
+        format!("{} {}", date, time).as_str(),
+        "%Y/%m/%d %H:%M:%S",
+    ) {
+        Ok(d) => d.and_utc().timestamp(),
+        Err(_) => -1,
+    };
 
     dt
 }
