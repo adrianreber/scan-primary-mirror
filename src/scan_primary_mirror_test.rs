@@ -35,23 +35,20 @@ fn ctime_from_rsync_test() {
 
 #[test]
 fn get_version_from_path_test() {
-    assert_eq!("", get_version_from_path("".to_string()));
-    assert_eq!("", get_version_from_path("/".to_string()));
-    assert_eq!("77", get_version_from_path("top/77/base".to_string()));
-    assert_eq!("8.8", get_version_from_path("top/8.8/base".to_string()));
-    assert_eq!("3", get_version_from_path("top/3/base".to_string()));
+    assert_eq!("", get_version_from_path(""));
+    assert_eq!("", get_version_from_path("/"));
+    assert_eq!("77", get_version_from_path("top/77/base"));
+    assert_eq!("8.8", get_version_from_path("top/8.8/base"));
+    assert_eq!("3", get_version_from_path("top/3/base"));
     assert_eq!(
         "development",
-        get_version_from_path("top/development/rawhide/os".to_string())
+        get_version_from_path("top/development/rawhide/os")
     );
-    assert_eq!("", get_version_from_path("top/development/os".to_string()));
-    assert_eq!(
-        "1030",
-        get_version_from_path("top/development/1030/os".to_string())
-    );
+    assert_eq!("", get_version_from_path("top/development/os"));
+    assert_eq!("1030", get_version_from_path("top/development/1030/os"));
     assert_eq!(
         "9-stream",
-        get_version_from_path("SIGs/9-stream/infra/x86_64/infra-common/".to_string())
+        get_version_from_path("SIGs/9-stream/infra/x86_64/infra-common/")
     );
 }
 
