@@ -208,7 +208,7 @@ fn get_version_from_path(path: &str) -> String {
     }
 
     let pattern = Regex::new(r"/(([\.\d]+)([-_]\w+)?)/").unwrap();
-    let version = match pattern.captures(&path) {
+    let version = match pattern.captures(path) {
         Some(v) if v.len() > 1 => v.get(1).unwrap().as_str().to_string(),
         _ => String::from(""),
     };
@@ -719,15 +719,9 @@ fn fill_ifds(p: &mut FillIfds) -> Result<(), Box<dyn Error>> {
 
         // find repomd.xml in file_details
         for fd in p.fds {
-            let timestamp_db = match fd.timestamp {
-                Some(t) => t,
-                _ => 0,
-            };
+            let timestamp_db = fd.timestamp.unwrap_or_default();
 
-            let size_db = match fd.size {
-                Some(s) => s,
-                _ => 0,
-            };
+            let size_db = fd.size.unwrap_or_default();
 
             let sha1_db = match &fd.sha1 {
                 Some(s) => String::from(s),
@@ -1065,10 +1059,7 @@ fn short_filelist(cd: &CategoryDirectory) -> String {
     } else {
         files.len()
     };
-    match serde_json::to_string(&files[0..limit]) {
-        Ok(j) => j,
-        _ => String::new(),
-    }
+    serde_json::to_string(&files[0..limit]).unwrap_or_default()
 }
 
 fn update_category_directory(
@@ -1731,14 +1722,8 @@ fn main() {
         &mut connection,
         &mut fds,
         &d,
-        match settings.max_stale_days {
-            Some(m) => m,
-            _ => 3,
-        },
-        match settings.max_propagation_days {
-            Some(m) => m,
-            _ => 2,
-        },
+        settings.max_stale_days.unwrap_or(3),
+        settings.max_propagation_days.unwrap_or(2),
     ) {
         println!("File Detail aging failed {}", e);
         process::exit(1);
