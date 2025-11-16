@@ -1300,11 +1300,19 @@ fn scan_local_directory(
     topdir: &str,
     url: &str,
     skip_fftl: bool,
+    category_name: &str,
 ) -> Result<(), Box<dyn Error>> {
     use glob::glob;
     use std::os::unix::fs::PermissionsExt;
 
-    let fullfiletimelist = match glob(format!("{}/fullfiletimelist-*", url).as_str())?.next() {
+    // For "Fedora Linux" category, fullfiletimelist is one directory up
+    let fftl_pattern = if category_name == "Fedora Linux" {
+        format!("{}/../fullfiletimelist-*", url)
+    } else {
+        format!("{}/fullfiletimelist-*", url)
+    };
+
+    let fullfiletimelist = match glob(&fftl_pattern)?.next() {
         Some(Ok(fftm)) => fftm.into_os_string().into_string().unwrap(),
         _ => "".to_string(),
     };
@@ -1321,12 +1329,18 @@ fn scan_local_directory(
             if v.len() < 4 {
                 continue;
             }
+            // For "Fedora Linux" category, remove "linux/" prefix (first 6 chars)
+            let path = if category_name == "Fedora Linux" && v[3].len() > 6 {
+                v[3][6..].to_string()
+            } else {
+                v[3].to_string()
+            };
             let info = FileInfo {
                 is_directory: v[1].starts_with('d'),
                 is_readable: !v[1].contains('-'),
                 size: v[2].parse()?,
                 timestamp: v[0].parse()?,
-                name: Some(v[3].to_string()),
+                name: Some(path),
             };
             add_entry_to_category_directories(info, cds, excludes, topdir);
         }
@@ -1618,6 +1632,7 @@ fn main() {
             &topdir,
             &config_file_category.url,
             params.skip_fftl,
+            &config_file_category.name,
         ),
         _ => {
             println!(
