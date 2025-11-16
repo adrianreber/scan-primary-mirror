@@ -1010,11 +1010,20 @@ fn scan_with_rsync_test() {
 fn scan_local_directory_test() {
     let mut cds: HashMap<String, CategoryDirectory> = HashMap::new();
 
-    if scan_local_directory(&mut cds, &[], "topdir/", "/this/should/not/exist", false).is_err() {
+    if scan_local_directory(
+        &mut cds,
+        &[],
+        "topdir/",
+        "/this/should/not/exist",
+        false,
+        "Test Category",
+    )
+    .is_err()
+    {
         panic!();
     }
     assert_eq!(cds.len(), 0);
-    if scan_local_directory(&mut cds, &[], "es", "test", false).is_err() {
+    if scan_local_directory(&mut cds, &[], "es", "test", false, "Test Category").is_err() {
         panic!();
     }
     println!("{:#?}", cds);
@@ -1051,7 +1060,7 @@ fn scan_local_directory_test() {
     f.write_all(content.as_bytes())
         .expect("Unable to write data");
 
-    if scan_local_directory(&mut cds, &[], "es", "test", false).is_err() {
+    if scan_local_directory(&mut cds, &[], "es", "test", false, "Test Category").is_err() {
         panic!();
     }
     for f in cds["test"].files.clone() {
@@ -1072,7 +1081,7 @@ fn scan_local_directory_test() {
     repomd_found = false;
     cds = HashMap::new();
 
-    if scan_local_directory(&mut cds, &[], "es", "test", true).is_err() {
+    if scan_local_directory(&mut cds, &[], "es", "test", true, "Test Category").is_err() {
         panic!();
     }
     assert_eq!(cds.len(), 1);
