@@ -202,7 +202,7 @@ fn basename(path: String) -> String {
 }
 
 /// This tries to figure out the version from a given path.
-fn get_version_from_path(path: String) -> String {
+fn get_version_from_path(path: &str) -> String {
     if path.contains("rawhide") {
         return String::from("development");
     }
@@ -264,7 +264,7 @@ fn guess_ver_arch_from_path(
         return Err("Not able to figure out architecture".into());
     }
 
-    for v in versions.clone() {
+    for v in &mut *versions {
         // This, just like the SRPMS <-> source connection above is a bit
         // unfortunate and hard coded for now. Can easily be pulled into
         // the configuration file if necessary.
@@ -272,7 +272,7 @@ fn guess_ver_arch_from_path(
         // repository prefix uses 'rawhide' as the version string.
         let v_name = match v.name.as_str() {
             "development" => "rawhide".to_string(),
-            _ => v.name,
+            _ => v.name.clone(),
         };
         let pattern = Regex::new(format!(r".*(^|/){}(/|$).*", v_name).as_str()).unwrap();
         if pattern.is_match(&path) && product_id == v.product_id {
@@ -283,7 +283,7 @@ fn guess_ver_arch_from_path(
     }
 
     if version_id == -1 {
-        let version = get_version_from_path(path.clone());
+        let version = get_version_from_path(&path);
         if !version.is_empty() {
             // Version does not exist yet in the database. Let's create it
             let mut is_test = false;
@@ -367,15 +367,15 @@ fn repo_prefix(
                     "{}{}-",
                     match rm.prefix.contains('$') {
                         // A '$' means that this contains a replacement group. Probably.
-                        true => pattern.replace(&path, rm.prefix.clone()).to_string(),
-                        _ => rm.prefix.clone(),
+                        true => pattern.replace(&path, &rm.prefix).to_string(),
+                        _ => rm.prefix.to_string(),
                     },
                     is_source_or_debug
                 );
 
                 for a in aliases {
                     if prefix == a.from {
-                        prefix = a.to.clone();
+                        prefix = a.to.to_string();
                     }
                 }
 
@@ -1155,15 +1155,15 @@ fn sync_category_directories(
 ) -> Result<(), Box<dyn Error>> {
     let mut update_directories: Vec<UpdateDirectory> = Vec::new();
     let mut ad: HashMap<String, CategoryDirectory> = HashMap::new();
-    for k in cds.clone().keys() {
+    let keys: Vec<_> = cds.keys().cloned().collect();
+    for k in &keys {
         let mut not_found = true;
         let cd = cds.get_mut(k).unwrap();
         let mut with_topdir = format!("{}{}", topdir, k);
         if k.is_empty() {
             with_topdir.pop();
         }
-        // Avoiding clone() would be nice. Not sure how.
-        for d in dirs.clone() {
+        for d in &*dirs {
             if d.name == with_topdir {
                 not_found = false;
                 let ctime_changed = cd.ctime != d.ctime;
@@ -1257,13 +1257,13 @@ fn sync_category_directories(
 }
 
 fn handle_unreadable(cds: &mut HashMap<String, CategoryDirectory>) {
-    let mut cds_keys: Vec<String> = cds.keys().cloned().collect::<Vec<String>>();
+    let mut cds_keys: Vec<String> = cds.keys().cloned().collect();
     cds_keys.sort();
 
     let cds_copy = cds.clone();
 
-    for d in cds_keys {
-        let cd = match cds.get_mut(&d) {
+    for d in &cds_keys {
+        let cd = match cds.get_mut(d) {
             Some(c) => c,
             _ => continue,
         };
