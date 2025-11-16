@@ -125,7 +125,7 @@ fn age_file_details(
 
     let mut old_id: i32 = -1;
     let mut old_ts: i64 = -1;
-    let mut old_name = String::from("");
+    let mut old_name = String::new();
     let now = chrono::offset::Local::now().timestamp();
     let stale = now - (60 * 60 * 24 * max_stale_days);
     let propagation = now - (60 * 60 * 24 * max_propagation_days);
@@ -195,10 +195,7 @@ fn ctime_from_rsync(date: String, time: String) -> i64 {
 
 /// This should return the same `basename` from the shell
 fn basename(path: String) -> String {
-    let file_and_path: Vec<&str> = path.split('/').collect();
-    let base = file_and_path.last().unwrap().to_string();
-
-    base
+    path.split('/').next_back().unwrap().to_string()
 }
 
 /// This tries to figure out the version from a given path.
@@ -210,20 +207,20 @@ fn get_version_from_path(path: &str) -> String {
     let pattern = Regex::new(r"/(([\.\d]+)([-_]\w+)?)/").unwrap();
     let version = match pattern.captures(path) {
         Some(v) if v.len() > 1 => v.get(1).unwrap().as_str().to_string(),
-        _ => String::from(""),
+        _ => String::new(),
     };
 
     if !version.is_empty() {
         return version;
     }
 
-    String::from("")
+    String::new()
 }
 
-/// Guess version and architecutre from a given path.
+/// Guess version and architecture from a given path.
 ///
 /// This returns the version name, the version ID and
-/// the architecutre ID as found in the database. Both IDs
+/// the architecture ID as found in the database. Both IDs
 /// are necessary to add a new entry to the table `repository`.
 ///
 /// If the found version does not exist in the database it is added
@@ -330,7 +327,7 @@ fn guess_ver_arch_from_path(
 
 /// Return the repository prefix based on the `path`, `version` and `rms`.
 ///
-/// * `rms` - this is the repositroy mapping as found in the configuration file.
+/// * `rms` - this is the repository mapping as found in the configuration file.
 ///   It consists of a regex and a prefix. If a patch matches the regex the given
 ///   prefix is used to create the repository prefix.
 ///
@@ -389,7 +386,7 @@ fn repo_prefix(
         }
     }
 
-    String::from("")
+    String::new()
 }
 
 /// Check if there already is a repository for this prefix and architecture
@@ -614,7 +611,9 @@ fn get_details_via_checksum_file(
 ) -> Result<Vec<DetailsResult>, Box<dyn Error>> {
     let (body, _) = get_file_content(checksum_base, topdir, dir, target, backend)?;
 
-    let mut drs: Vec<DetailsResult> = Vec::new();
+    // Pre-allocate drs based on the number of files
+    let estimated_capacity = files.as_ref().map_or(0, |f| f.len());
+    let mut drs: Vec<DetailsResult> = Vec::with_capacity(estimated_capacity);
 
     if files.is_none() {
         return Ok(Vec::new());
@@ -723,25 +722,13 @@ fn fill_ifds(p: &mut FillIfds) -> Result<(), Box<dyn Error>> {
 
             let size_db = fd.size.unwrap_or_default();
 
-            let sha1_db = match &fd.sha1 {
-                Some(s) => String::from(s),
-                _ => String::from(""),
-            };
+            let sha1_db = fd.sha1.clone().unwrap_or_default();
 
-            let md5_db = match &fd.md5 {
-                Some(s) => String::from(s),
-                _ => String::from(""),
-            };
+            let md5_db = fd.md5.clone().unwrap_or_default();
 
-            let sha256_db = match &fd.sha256 {
-                Some(s) => String::from(s),
-                _ => String::from(""),
-            };
+            let sha256_db = fd.sha256.clone().unwrap_or_default();
 
-            let sha512_db = match &fd.sha512 {
-                Some(s) => String::from(s),
-                _ => String::from(""),
-            };
+            let sha512_db = fd.sha512.clone().unwrap_or_default();
 
             if fd.directory_id == p.d_id
                 && fd.filename == dr.target
@@ -824,7 +811,10 @@ fn find_repositories(p: &mut FindRepositories) -> Result<usize, Box<dyn Error>> 
         return Err(format!("Cannot handle backend type {}", p.backend).into());
     }
 
-    let mut ifds: Vec<db::models::InsertFileDetail> = Vec::new();
+    // Pre-allocate ifds with estimated capacity
+    // Estimate: ~10% of directories might have CHECKSUM files with ~5 checksums each
+    let estimated_capacity = (p.cds.len() / 10).max(1) * 5;
+    let mut ifds: Vec<db::models::InsertFileDetail> = Vec::with_capacity(estimated_capacity);
 
     let arches = db::functions::get_arches(p.c)?;
     let mut versions = db::functions::get_versions(p.c)?;
@@ -979,7 +969,7 @@ fn add_entry_to_category_directories(
     let dir = match Path::new(&name).parent() {
         Some(parent) => match parent.to_str() {
             Some(p) => match fi.is_directory {
-                true if base == "." => String::from(""),
+                true if base == "." => String::new(),
                 true => name,
                 _ => String::from(p),
             },
@@ -988,7 +978,7 @@ fn add_entry_to_category_directories(
                 return;
             }
         },
-        _ => String::from(""),
+        _ => String::new(),
     };
 
     let with_topdir = match dir.is_empty() {
@@ -1036,7 +1026,7 @@ fn list_categories(cl: &[db::functions::Category]) {
 
 // This function returns a JSON string of the newest
 // files in the given directory.
-// If there are moren than max (10) of either .rpm
+// If there are more than max (10) of either .rpm
 // or .html files only the newest 10 files are
 // returned.
 // This is the list of files the crawler will search for.
@@ -1076,13 +1066,13 @@ fn update_category_directory(
         directory_id: &'a i32,
     }
 
-    let mut new_cds: Vec<InsertCategoryDirectory> = Vec::new();
-    for i in uc {
-        new_cds.push(InsertCategoryDirectory {
+    let new_cds: Vec<InsertCategoryDirectory> = uc
+        .iter()
+        .map(|i| InsertCategoryDirectory {
             category_id: &cat_id,
             directory_id: &i.id,
-        });
-    }
+        })
+        .collect();
 
     let insert = diesel::insert_into(category_directory).values(&new_cds);
 
@@ -1115,15 +1105,15 @@ fn add_directories(
         name: &'a String,
     }
 
-    let mut new_directories: Vec<InsertDirectory> = Vec::new();
-    for k in ad.keys() {
-        new_directories.push(InsertDirectory {
-            readable: &ad[k].readable,
-            ctime: &ad[k].ctime,
+    let new_directories: Vec<InsertDirectory> = ad
+        .iter()
+        .map(|(k, v)| InsertDirectory {
+            readable: &v.readable,
+            ctime: &v.ctime,
             name: k,
-            files: short_filelist(&ad[k]).as_bytes().to_vec(),
-        });
-    }
+            files: short_filelist(v).as_bytes().to_vec(),
+        })
+        .collect();
 
     let insert = diesel::insert_into(directory).values(&new_directories);
 
@@ -1396,13 +1386,14 @@ fn scan_with_rsync(
         .output();
 
     let pattern = Regex::new(r"([drwSsx-]{10})\s*(.*) (.*) (.*) (.*)")?;
+    let readable_pattern = Regex::new(r"^d......r.x").unwrap();
 
     String::from_utf8(output?.stdout)?
         .lines()
         .filter_map(|line| pattern.captures(line))
         .map(|info| FileInfo {
             is_directory: info[1].starts_with('d'),
-            is_readable: Regex::new(r"^d......r.x").unwrap().is_match(&info[1]),
+            is_readable: readable_pattern.is_match(&info[1]),
             size: info[2].parse().unwrap(),
             timestamp: ctime_from_rsync(info[3].to_string(), info[4].to_string()),
             name: info.get(5).map(|n| n.as_str().trim().to_string()),
