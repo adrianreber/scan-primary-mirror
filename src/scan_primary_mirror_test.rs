@@ -1100,6 +1100,110 @@ fn scan_local_directory_test() {
 }
 
 #[test]
+fn scan_local_directory_fedora_linux_test() {
+    use std::fs;
+    use std::fs::File;
+    use std::io::Write;
+
+    // Create test directory structure for Fedora Linux category
+    // Fedora Linux category expects fullfiletimelist one level up
+    if fs::create_dir_all("test/fedora-linux/releases").is_err() {
+        // Directory might already exist
+    }
+
+    let mut cds: HashMap<String, CategoryDirectory> = HashMap::new();
+
+    // Create fullfiletimelist in parent directory with "linux/" prefixed paths
+    let content = format!(
+        "{}\t{}\t{}\t{}\n{}\t{}\t{}\t{}\n{}\t{}\t{}\t{}\n",
+        "1621350993",
+        "drwxr-xr-x",
+        "4096",
+        "linux/releases",
+        "1621350994",
+        "drwxr-xr-x",
+        "4096",
+        "linux/releases/42",
+        "1621350995",
+        "-rw-r--r--",
+        "1234",
+        "linux/releases/42/repomd.xml",
+    );
+
+    let mut f = File::create("test/fullfiletimelist-fedora").expect("Unable to create file");
+    f.write_all(content.as_bytes())
+        .expect("Unable to write data");
+
+    // Test with "Fedora Linux" category - should find file in parent dir and strip prefix
+    if scan_local_directory(
+        &mut cds,
+        &[],
+        "releases",
+        "test/fedora-linux",
+        false,
+        "Fedora Linux",
+    )
+    .is_err()
+    {
+        panic!();
+    }
+
+    // Verify the paths had "linux/" prefix stripped
+    // The category directories should exist without "linux/" prefix
+    let mut releases_dir_found = false;
+    let mut releases_42_dir_found = false;
+    let mut repomd_found = false;
+
+    // Debug output
+    for (key, _cd) in cds.iter() {
+        println!("Category directory key: {}", key);
+    }
+
+    // Check that directories were created with stripped paths
+    if cds.contains_key("releases") {
+        releases_dir_found = true;
+    }
+
+    if cds.contains_key("releases/42") {
+        releases_42_dir_found = true;
+    }
+
+    // Check in the specific category directory for the file
+    if let Some(cd) = cds.get("releases/42") {
+        for f in &cd.files {
+            println!(
+                "File in releases/42: {} (size: {}, timestamp: {})",
+                f.name, f.size, f.timestamp
+            );
+            if f.name == "repomd.xml" && f.size == 1234 && f.timestamp == 1621350995 {
+                repomd_found = true;
+            }
+        }
+    }
+
+    // Clean up
+    if fs::remove_file("test/fullfiletimelist-fedora").is_err() {
+        panic!();
+    }
+    if fs::remove_dir_all("test/fedora-linux").is_err() {
+        // Ignore errors - directory might not exist
+    }
+
+    assert!(
+        releases_dir_found,
+        "releases directory should be found with prefix stripped"
+    );
+    assert!(
+        releases_42_dir_found,
+        "releases/42 directory should be found with prefix stripped"
+    );
+    assert!(
+        repomd_found,
+        "repomd.xml should be found with correct size and timestamp"
+    );
+}
+
+#[test]
 fn find_repositories_test() {
     let mut c = match get_db_connection() {
         Ok(c) => c,
