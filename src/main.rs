@@ -590,11 +590,15 @@ fn get_details(
     let mut sha512 = Sha512::new();
     sha512.update(&body);
 
+    let to_hex = |hash: &[u8]| -> String {
+        hash.iter().map(|b| format!("{:02x}", b)).collect()
+    };
+
     Ok(vec![DetailsResult {
-        md5_sum: format!("{:x}", md5.finalize()),
-        sha1_sum: format!("{:x}", sha1.finalize()),
-        sha256_sum: format!("{:x}", sha256.finalize()),
-        sha512_sum: format!("{:x}", sha512.finalize()),
+        md5_sum: to_hex(&md5.finalize()),
+        sha1_sum: to_hex(&sha1.finalize()),
+        sha256_sum: to_hex(&sha256.finalize()),
+        sha512_sum: to_hex(&sha512.finalize()),
         length: content_length,
         timestamp: xml::get_timestamp(body),
         target: target.to_string(),
