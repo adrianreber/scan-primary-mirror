@@ -21,3 +21,13 @@ It addition to scanning timestamps `scan-primary-mirror` will also detect
 If a *repository* is found `scan-primary-mirror` will retrieve different
 hashsums of the `repomd.xml` file which is then used by the
 `mirrorlist-server` to create *metalinks* for YUM/DNF clients.
+
+Running tests
+-------------
+
+Tests are managed using `bats <https://github.com/bats-core/bats-core>`_
+and require ``podman`` and ``python3`` to be installed. The test suite starts
+a PostgreSQL container, loads the test schema, and launches a local HTTP
+server automatically::
+
+  bats tests/test_cargo.bats
