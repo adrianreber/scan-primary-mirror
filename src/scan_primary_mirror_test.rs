@@ -1220,7 +1220,7 @@ fn find_repositories_test() {
         panic!();
     }
     assert_eq!(cds.len(), 1);
-    cds.get_mut(&"test".to_string()).unwrap().ctime_changed = true;
+    cds.get_mut("test").unwrap().ctime_changed = true;
 
     let category = db::functions::Category {
         id: 1,
