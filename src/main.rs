@@ -240,7 +240,7 @@ fn guess_ver_arch_from_path(
     let mut version_name = String::new();
 
     for a in arches {
-        let pattern = Regex::new(format!(r".*(^|/){}(/|$).*", &a.name).as_str()).unwrap();
+        let pattern = Regex::new(format!(r".*(^|/){}(/|$).*", a.name).as_str()).unwrap();
         if pattern.is_match(&path) {
             arch_id = a.id;
             break;
@@ -976,7 +976,7 @@ fn add_entry_to_category_directories(
                 _ => String::from(p),
             },
             _ => {
-                println!("Failed getting parent path for {}", &name);
+                println!("Failed getting parent path for {}", name);
                 return;
             }
         },
@@ -1375,7 +1375,7 @@ fn scan_with_rsync(
 ) -> Result<(), Box<dyn Error>> {
     debug::print_step(format!(
         "Running rsync -r --no-human-readable {:?} {:?} {}",
-        &rsync_options, &category_rsync_options, url
+        rsync_options, category_rsync_options, url
     ));
 
     let output = Command::new("rsync")
@@ -1626,7 +1626,7 @@ fn main() {
             process::exit(1);
         }
     } {
-        println!("Scanning {} failed with {}", &config_file_category.url, e);
+        println!("Scanning {} failed with {}", config_file_category.url, e);
         process::exit(1);
     }
 
