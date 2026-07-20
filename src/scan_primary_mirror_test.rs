@@ -1152,7 +1152,7 @@ fn scan_local_directory_fedora_linux_test() {
     let mut repomd_found = false;
 
     // Debug output
-    for (key, _cd) in cds.iter() {
+    for key in cds.keys() {
         println!("Category directory key: {}", key);
     }
 
