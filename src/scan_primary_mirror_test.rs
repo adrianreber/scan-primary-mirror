@@ -1277,3 +1277,112 @@ fn find_repositories_test() {
         "55bd241dae474d89225650a0dd6446d21cbdccb607062e675543b91e074364a3"
     );
 }
+
+#[test]
+fn scan_local_directory_fedora_linux_edges_test() {
+    use std::fs;
+    use std::fs::File;
+    use std::io::Write;
+
+    // Use a directory of its own. The fullfiletimelist of the "Fedora Linux"
+    // category is looked up one level above the category, so two tests
+    // sharing a parent directory would race for the same file.
+    let _ = fs::create_dir_all("test/fl-edges/linux");
+
+    let mut cds: HashMap<String, CategoryDirectory> = HashMap::new();
+
+    // These lines have the same shape as the ones in the real
+    // fullfiletimelist-fedora, which describes pub/fedora and not
+    // pub/fedora/linux. It contains an entry for "linux" itself and
+    // entries for the siblings of "linux/".
+    let content = concat!(
+        "1519244422\td\t4096\tlinux\n",
+        "1621350993\td\t4096\tlinux/releases\n",
+        "1621350994\td\t4096\tlinux/releases/42\n",
+        "1621350995\tf\t1234\tlinux/releases/42/repomd.xml\n",
+        "1792528785\tf\t0\tupdate-fullfiletimelist.lock\n",
+    );
+
+    let mut f =
+        File::create("test/fl-edges/fullfiletimelist-fedora").expect("Unable to create file");
+    f.write_all(content.as_bytes())
+        .expect("Unable to write data");
+
+    if scan_local_directory(
+        &mut cds,
+        &[],
+        "",
+        "test/fl-edges/linux",
+        false,
+        "Fedora Linux",
+    )
+    .is_err()
+    {
+        panic!();
+    }
+
+    let _ = fs::remove_dir_all("test/fl-edges");
+
+    // The entry for "linux" is the topdir of the category and not a
+    // directory called "linux" below it.
+    assert!(
+        cds.contains_key(""),
+        "the entry for 'linux' should become the topdir, got {:?}",
+        cds.keys().collect::<Vec<_>>()
+    );
+    assert!(
+        !cds.contains_key("linux"),
+        "there should be no directory called 'linux' below the topdir"
+    );
+
+    // Everything below "linux/" keeps working.
+    assert!(cds.contains_key("releases"));
+    assert!(cds.contains_key("releases/42"));
+    let repomd = cds["releases/42"]
+        .files
+        .iter()
+        .find(|f| f.name == "repomd.xml")
+        .expect("repomd.xml should be in releases/42");
+    assert_eq!(repomd.size, 1234);
+    assert_eq!(repomd.timestamp, 1621350995);
+
+    // A sibling of "linux/" keeps its name instead of losing its first six
+    // characters, and ends up in the topdir of the category.
+    assert!(
+        cds[""]
+            .files
+            .iter()
+            .any(|f| f.name == "update-fullfiletimelist.lock"),
+        "found {:?} in the topdir",
+        cds[""].files.iter().map(|f| &f.name).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn skip_chars_test() {
+    assert_eq!(skip_chars("linux/releases", 6), "releases");
+    // Shorter than the prefix: nothing is left, like "linux"[6:] in Python.
+    assert_eq!(skip_chars("linux", 6), "");
+    assert_eq!(skip_chars("", 6), "");
+    // Exactly as long as the prefix.
+    assert_eq!(skip_chars("linux/", 6), "");
+    // Multi byte characters must not panic.
+    assert_eq!(skip_chars("äöüäöü/rest", 6), "/rest");
+    assert_eq!(skip_chars("äöü", 6), "");
+}
+
+#[test]
+fn fedora_linux_path_test() {
+    assert_eq!(fedora_linux_path("linux", true), "");
+    assert_eq!(fedora_linux_path("linux/releases", true), "releases");
+    assert_eq!(
+        fedora_linux_path("linux/releases/42/repomd.xml", false),
+        "releases/42/repomd.xml"
+    );
+    // Not below "linux/": the Python implementation takes the name from the
+    // unmodified path and records the file in the topdir of the category.
+    assert_eq!(
+        fedora_linux_path("update-fullfiletimelist.lock", false),
+        "update-fullfiletimelist.lock"
+    );
+}

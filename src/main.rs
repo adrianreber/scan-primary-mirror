@@ -1277,6 +1277,51 @@ fn is_not_hidden(entry: &DirEntry) -> bool {
         .unwrap_or(false)
 }
 
+/// Remove the first `n` characters of `s`.
+///
+/// This works on characters and not on bytes to avoid panicking on a path
+/// which has a multi byte character in the first `n` bytes.
+fn skip_chars(s: &str, n: usize) -> &str {
+    match s.char_indices().nth(n) {
+        Some((offset, _)) => &s[offset..],
+        // The string is not longer than `n` characters, nothing is left.
+        None => "",
+    }
+}
+
+/// Turn a path from `fullfiletimelist-fedora` into a path relative to the
+/// topdir of the "Fedora Linux" category.
+///
+/// "Fedora Linux" is the only category which starts one directory level
+/// lower than its fullfiletimelist:
+///
+/// * "Fedora Linux" -> pub/fedora/linux
+/// * "Fedora EPEL"  -> pub/epel
+///
+/// fullfiletimelist-fedora describes pub/fedora and its paths therefore
+/// start at "linux/", which has to be removed so that topdir + path points
+/// to the right entry. This is the same transformation the Python
+/// implementation in mirrormanager2 does, including the two quirks it has
+/// for entries which are not below "linux/":
+///
+/// * the entry for "linux" itself becomes the topdir of the category
+/// * for files the name is taken from the unmodified path, so a sibling of
+///   "linux/" such as "update-fullfiletimelist.lock" keeps its name and is
+///   recorded in the topdir of the category
+fn fedora_linux_path(path: &str, is_directory: bool) -> String {
+    let stripped = skip_chars(path, 6);
+
+    if is_directory {
+        return stripped.to_string();
+    }
+
+    let name = basename(path.to_string());
+    match Path::new(stripped).parent().and_then(Path::to_str) {
+        Some("") | None => name,
+        Some(parent) => format!("{}/{}", parent, name),
+    }
+}
+
 fn scan_local_directory(
     cds: &mut HashMap<String, CategoryDirectory>,
     excludes: &[String],
@@ -1312,14 +1357,13 @@ fn scan_local_directory(
             if v.len() < 4 {
                 continue;
             }
-            // For "Fedora Linux" category, remove "linux/" prefix (first 6 chars)
-            let path = if category_name == "Fedora Linux" && v[3].len() > 6 {
-                v[3][6..].to_string()
-            } else {
-                v[3].to_string()
+            let is_directory = v[1].starts_with('d');
+            let path = match category_name {
+                "Fedora Linux" => fedora_linux_path(v[3], is_directory),
+                _ => v[3].to_string(),
             };
             let info = FileInfo {
-                is_directory: v[1].starts_with('d'),
+                is_directory,
                 is_readable: !v[1].contains('-'),
                 size: v[2].parse()?,
                 timestamp: v[0].parse()?,
