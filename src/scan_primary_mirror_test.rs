@@ -1453,6 +1453,9 @@ fn scan_local_directory_fedora_linux_edges_test() {
         !cds.contains_key("linux"),
         "there should be no directory called 'linux' below the topdir"
     );
+    // The line for "linux" replaces the top directory entry that
+    // scan_local_directory() takes from the file system.
+    assert_eq!(cds[""].ctime, 1519244422);
 
     // Everything below "linux/" keeps working.
     assert!(cds.contains_key("releases"));
@@ -1504,4 +1507,53 @@ fn fedora_linux_path_test() {
         fedora_linux_path("update-fullfiletimelist.lock", false),
         "update-fullfiletimelist.lock"
     );
+}
+
+#[test]
+fn scan_local_directory_top_directory_test() {
+    use std::fs;
+    use std::fs::File;
+    use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = "test/fftl-top";
+    let _ = fs::create_dir_all(dir);
+
+    // A fullfiletimelist-* file has no line for the directory it describes.
+    let content = concat!(
+        "[Files]\n",
+        "1621350993\td\t4096\treleases\n",
+        "1621350994\tf\t1234\treleases/image.iso\n",
+        "1621350995\tf\t4321\tfullfiletimelist-top\n",
+    );
+    File::create(format!("{}/fullfiletimelist-top", dir))
+        .expect("Unable to create file")
+        .write_all(content.as_bytes())
+        .expect("Unable to write data");
+
+    let scan = |mode: u32| {
+        fs::set_permissions(dir, fs::Permissions::from_mode(mode)).unwrap();
+        let mut cds: HashMap<String, CategoryDirectory> = HashMap::new();
+        if scan_local_directory(&mut cds, &[], "pub/top/", dir, false, "Test Category").is_err() {
+            panic!();
+        }
+        handle_unreadable(&mut cds);
+        cds
+    };
+
+    let readable = scan(0o755);
+    let unreadable = scan(0o750);
+    let _ = fs::remove_dir_all(dir);
+
+    assert!(readable[""].readable);
+    assert_eq!(readable[""].ctime, 0);
+    assert!(readable[""]
+        .files
+        .iter()
+        .any(|f| f.name == "fullfiletimelist-top"));
+    assert!(readable["releases"].readable);
+    assert_eq!(readable["releases"].ctime, 1621350993);
+
+    assert!(!unreadable[""].readable);
+    assert!(!unreadable["releases"].readable);
 }

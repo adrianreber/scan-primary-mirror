@@ -1354,6 +1354,30 @@ fn scan_local_directory(
             "Local directory ({}) scan using {}",
             url, fullfiletimelist
         ));
+        // A fullfiletimelist-* file has no line for the directory it
+        // describes. Without an entry for the top directory,
+        // add_entry_to_category_directories() creates the top directory as
+        // unreadable when it adds the first file in it. handle_unreadable()
+        // then marks every direct subdirectory as unreadable. Add the top
+        // directory with the readable state from the file system before
+        // reading the list. For "Fedora Linux", the line for "linux" in
+        // fullfiletimelist-fedora is the top directory and replaces the
+        // entry added here. mm2_update-master-directory-list also stores a
+        // ctime of 0 for the top directory.
+        let top = std::fs::metadata(url)?;
+        add_entry_to_category_directories(
+            FileInfo {
+                is_directory: true,
+                is_readable: (top.permissions().mode() & 0o4) != 0,
+                size: 0,
+                timestamp: 0,
+                name: Some(String::new()),
+            },
+            cds,
+            excludes,
+            topdir,
+        );
+
         let file = std::fs::File::open(fullfiletimelist)?;
         let data = unsafe { memmap::MmapOptions::new().map(&file)? };
         for line in data.split(|elem| elem == &b'\n') {
