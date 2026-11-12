@@ -2,9 +2,9 @@ table! {
     directory (id) {
         id -> Integer,
         name -> Text,
-        files -> Binary,
-        readable -> Bool,
-        ctime -> BigInt,
+        files -> Nullable<Binary>,
+        readable -> Nullable<Bool>,
+        ctime -> Nullable<BigInt>,
     }
 }
 

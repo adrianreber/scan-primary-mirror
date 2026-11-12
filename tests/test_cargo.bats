@@ -4,7 +4,7 @@ CONTAINER_NAME="scan-primary-mirror-test-postgres"
 POSTGRES_PASSWORD="test_password"
 POSTGRES_USER="test_user"
 DB_NAME="test_db"
-DB_PORT=5432
+DB_PORT="${DB_PORT:-5432}"
 HTTP_PORT=17397
 
 setup_file() {

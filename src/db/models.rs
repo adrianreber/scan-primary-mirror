@@ -17,9 +17,9 @@ pub struct Category {
 pub struct Directory {
     pub id: i32,
     pub name: String,
-    pub files: Vec<u8>,
-    pub readable: bool,
-    pub ctime: i64,
+    pub files: Option<Vec<u8>>,
+    pub readable: Option<bool>,
+    pub ctime: Option<i64>,
 }
 
 #[derive(Queryable, Identifiable)]

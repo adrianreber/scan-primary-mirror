@@ -1149,26 +1149,30 @@ fn sync_category_directories(
         for d in &*dirs {
             if d.name == with_topdir {
                 not_found = false;
-                let ctime_changed = cd.ctime != d.ctime;
-                let readable_changed = cd.readable != d.readable;
+                // A NULL in directory.ctime or directory.readable differs
+                // from every scanned value and causes an update. A NULL in
+                // directory.files alone causes no update. The file list is
+                // written the next time directory.ctime changes.
+                let ctime_changed = d.ctime != Some(cd.ctime);
+                let readable_changed = d.readable != Some(cd.readable);
                 if ctime_changed || readable_changed {
                     let mut entry = UpdateDirectory {
                         dir: d.clone(),
-                        ctime_changed: cd.ctime != d.ctime,
-                        readable_changed: cd.readable != d.readable,
+                        ctime_changed,
+                        readable_changed,
                         files_changed: false,
                     };
                     if ctime_changed {
-                        entry.dir.ctime = cd.ctime;
+                        entry.dir.ctime = Some(cd.ctime);
                         cd.ctime_changed = true;
                     }
                     if readable_changed {
-                        entry.dir.readable = cd.readable;
+                        entry.dir.readable = Some(cd.readable);
                     }
                     if readable_changed || ctime_changed {
                         let json = short_filelist(cd);
-                        if d.files != json.as_bytes() {
-                            entry.dir.files = json.as_bytes().to_vec();
+                        if d.files.as_deref() != Some(json.as_bytes()) {
+                            entry.dir.files = Some(json.into_bytes());
                             entry.files_changed = true;
                         }
                     }
@@ -1218,13 +1222,13 @@ fn sync_category_directories(
         let mut ud = UpdateDirectory::default();
 
         if u.ctime_changed {
-            ud.ctime = Some(&u.dir.ctime);
+            ud.ctime = u.dir.ctime.as_ref();
         }
         if u.readable_changed {
-            ud.readable = Some(&u.dir.readable);
+            ud.readable = u.dir.readable.as_ref();
         }
         if u.files_changed {
-            ud.files = Some(&u.dir.files);
+            ud.files = u.dir.files.as_ref();
         }
 
         let target = directory.filter(db::schema::directory::dsl::id.eq(u.dir.id));
