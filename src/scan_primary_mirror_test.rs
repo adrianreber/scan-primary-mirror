@@ -256,23 +256,23 @@ fn age_file_details_test() {
         db::models::Directory {
             id: 7,
             name: "dirname7".to_string(),
-            files: Vec::new(),
-            readable: true,
-            ctime: 0,
+            files: Some(Vec::new()),
+            readable: Some(true),
+            ctime: Some(0),
         },
         db::models::Directory {
             id: 8,
             name: "dirname8".to_string(),
-            files: Vec::new(),
-            readable: true,
-            ctime: 0,
+            files: Some(Vec::new()),
+            readable: Some(true),
+            ctime: Some(0),
         },
         db::models::Directory {
             id: 9,
             name: "dirname9".to_string(),
-            files: Vec::new(),
-            readable: true,
-            ctime: 0,
+            files: Some(Vec::new()),
+            readable: Some(true),
+            ctime: Some(0),
         },
     ];
 
@@ -451,15 +451,15 @@ fn sync_category_directories_test() {
     );
     // now it should contain the entry from above
     assert_eq!(dirs.len(), 1);
-    assert_eq!(dirs[0].ctime, 1000);
-    assert!(dirs[0].readable);
+    assert_eq!(dirs[0].ctime, Some(1000));
+    assert_eq!(dirs[0].readable, Some(true));
     assert_eq!(dirs[0].name, "topdir/directory1".to_string());
 
     dirs = db::functions::get_directories(&mut c, 37);
     // test after reading from database
     assert_eq!(dirs.len(), 1);
-    assert_eq!(dirs[0].ctime, 1000);
-    assert!(dirs[0].readable);
+    assert_eq!(dirs[0].ctime, Some(1000));
+    assert_eq!(dirs[0].readable, Some(true));
     assert_eq!(dirs[0].name, "topdir/directory1".to_string());
     // update entry
     cd1.ctime = 2000;
@@ -471,9 +471,128 @@ fn sync_category_directories_test() {
     dirs = db::functions::get_directories(&mut c, 37);
     assert_eq!(dirs.len(), 1);
     // this should have been updated
-    assert_eq!(dirs[0].ctime, 2000);
-    assert!(dirs[0].readable);
+    assert_eq!(dirs[0].ctime, Some(2000));
+    assert_eq!(dirs[0].readable, Some(true));
     assert_eq!(dirs[0].name, "topdir/directory1".to_string());
+}
+
+#[test]
+fn sync_category_directories_null_columns_test() {
+    use db::schema::category_directory::dsl as cd_dsl;
+    use db::schema::directory::dsl as d_dsl;
+
+    let mut c = match get_db_connection() {
+        Ok(c) => c,
+        Err(e) => {
+            println!("Database connection failed {}", e);
+            panic!();
+        }
+    };
+
+    // clean tables for test
+    assert!(
+        diesel::delete(db::schema::category_directory::dsl::category_directory)
+            .execute(&mut c)
+            .is_ok()
+    );
+    assert!(diesel::delete(db::schema::file_detail::dsl::file_detail)
+        .execute(&mut c)
+        .is_ok());
+    assert!(diesel::delete(db::schema::directory::dsl::directory)
+        .execute(&mut c)
+        .is_ok());
+
+    // MirrorManager2 allows NULL in directory.files, directory.readable
+    // and directory.ctime.
+    let empty = Some(b"[]".to_vec());
+    let rows = [
+        ("topdir/null-files", None, Some(true), Some(1000_i64)),
+        ("topdir/null-files-new-ctime", None, Some(true), Some(900)),
+        ("topdir/null-readable", empty.clone(), None, Some(1000)),
+        ("topdir/null-ctime", empty, Some(true), None),
+    ];
+    for (n, f, r, t) in rows {
+        let dir_id: i32 = diesel::insert_into(d_dsl::directory)
+            .values((
+                d_dsl::name.eq(n),
+                d_dsl::files.eq(f),
+                d_dsl::readable.eq(r),
+                d_dsl::ctime.eq(t),
+            ))
+            .returning(d_dsl::id)
+            .get_result(&mut c)
+            .unwrap();
+        diesel::insert_into(cd_dsl::category_directory)
+            .values((cd_dsl::category_id.eq(37), cd_dsl::directory_id.eq(dir_id)))
+            .execute(&mut c)
+            .unwrap();
+    }
+
+    let mut dirs = db::functions::get_directories(&mut c, 37);
+    assert_eq!(dirs.len(), 4);
+
+    let file = File {
+        name: "image.iso".to_string(),
+        size: 42,
+        timestamp: 1000,
+    };
+    let mut cds: HashMap<String, CategoryDirectory> = HashMap::new();
+    for k in [
+        "null-files",
+        "null-files-new-ctime",
+        "null-readable",
+        "null-ctime",
+    ] {
+        cds.insert(
+            k.to_string(),
+            CategoryDirectory {
+                files: vec![file.clone()],
+                readable: true,
+                ctime: 1000,
+                directory_id: 0,
+                ctime_changed: false,
+            },
+        );
+    }
+    let expected_files = short_filelist(&cds["null-files"]).into_bytes();
+
+    assert!(
+        sync_category_directories(&mut c, "topdir/".to_string(), 37, &mut dirs, &mut cds).is_ok()
+    );
+
+    let dirs: HashMap<String, db::models::Directory> = db::functions::get_directories(&mut c, 37)
+        .into_iter()
+        .map(|d| (d.name.clone(), d))
+        .collect();
+    assert_eq!(dirs.len(), 4);
+    let expected = Some(expected_files.as_slice());
+
+    // A NULL in directory.files alone causes no update.
+    let d = &dirs["topdir/null-files"];
+    assert_eq!(d.files, None);
+    assert_eq!(d.readable, Some(true));
+    assert_eq!(d.ctime, Some(1000));
+
+    let d = &dirs["topdir/null-files-new-ctime"];
+    assert_eq!(d.files.as_deref(), expected);
+    assert_eq!(d.readable, Some(true));
+    assert_eq!(d.ctime, Some(1000));
+
+    let d = &dirs["topdir/null-readable"];
+    assert_eq!(d.files.as_deref(), expected);
+    assert_eq!(d.readable, Some(true));
+    assert_eq!(d.ctime, Some(1000));
+
+    let d = &dirs["topdir/null-ctime"];
+    assert_eq!(d.files.as_deref(), expected);
+    assert_eq!(d.readable, Some(true));
+    assert_eq!(d.ctime, Some(1000));
+
+    // find_repositories() only looks at directories with ctime_changed set.
+    assert!(!cds["null-files"].ctime_changed);
+    assert!(cds["null-files-new-ctime"].ctime_changed);
+    assert!(!cds["null-readable"].ctime_changed);
+    assert!(cds["null-ctime"].ctime_changed);
 }
 
 #[test]
