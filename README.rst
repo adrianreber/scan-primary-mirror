@@ -31,3 +31,8 @@ a PostgreSQL container, loads the test schema, and launches a local HTTP
 server automatically::
 
   bats tests/test_cargo.bats
+
+The PostgreSQL container publishes port 5432. If another PostgreSQL server
+already listens on 5432, set ``DB_PORT`` to another port::
+
+  DB_PORT=15432 bats tests/test_cargo.bats
