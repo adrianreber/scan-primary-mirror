@@ -1398,6 +1398,109 @@ fn find_repositories_test() {
 }
 
 #[test]
+fn find_repositories_no_prefix_test() {
+    let mut c = match get_db_connection() {
+        Ok(c) => c,
+        Err(e) => {
+            println!("Database connection failed {}", e);
+            panic!();
+        }
+    };
+
+    // clean tables for test
+    assert!(diesel::delete(db::schema::version::dsl::version)
+        .execute(&mut c)
+        .is_ok());
+    assert!(diesel::delete(db::schema::repository::dsl::repository)
+        .execute(&mut c)
+        .is_ok());
+    assert!(diesel::delete(db::schema::arch::dsl::arch)
+        .execute(&mut c)
+        .is_ok());
+    assert!(diesel::insert_into(db::schema::arch::dsl::arch)
+        .values(db::schema::arch::dsl::name.eq("x86_64"))
+        .execute(&mut c)
+        .is_ok());
+
+    // Only the repository mapping for "mapped" matches. The repository
+    // below "mapped" shows that find_repositories() reaches the repository
+    // creation for these directories.
+    let mut cds: HashMap<String, CategoryDirectory> = HashMap::new();
+    for dir in [
+        "mapped/43/x86_64/os",
+        "mapped/43/x86_64/os/repodata",
+        "unmapped/43/x86_64/os",
+        "unmapped/43/x86_64/os/repodata",
+    ] {
+        cds.insert(
+            dir.to_string(),
+            CategoryDirectory {
+                ctime_changed: true,
+                ..Default::default()
+            },
+        );
+    }
+
+    let category = db::functions::Category {
+        id: 1,
+        name: "Category".to_string(),
+        topdir: "pub/test/".to_string(),
+        product_id: 5,
+    };
+
+    let rms = vec![settings::RepositoryMapping {
+        regex: "^pub/test/mapped/".to_string(),
+        prefix: "mapped".to_string(),
+        version_prefix: None,
+    }];
+
+    // No repomd.xml exists below this directory. Reading the file fails,
+    // and find_repositories() continues without file details.
+    let mut fds: Vec<db::models::FileDetail> = Vec::new();
+    let mut find_parameter = FindRepositories {
+        c: &mut c,
+        cds: &mut cds,
+        checksum_base: Some("test/no-prefix/".to_string()),
+        top: "pub/test/".to_string(),
+        cat: &category,
+        repos: &[],
+        rms: &rms,
+        fds: &mut fds,
+        skip_paths: &[],
+        test_paths: &[],
+        skip_repository_paths: &[],
+        do_not_display_paths: &[],
+        backend: "directory".to_string(),
+        aliases: &[],
+    };
+    if let Err(e) = find_repositories(&mut find_parameter) {
+        println!("Creating repositories in database failed {}", e);
+        panic!();
+    }
+
+    let repos = match db::schema::repository::dsl::repository
+        .select((
+            db::schema::repository::dsl::name,
+            db::schema::repository::dsl::prefix,
+        ))
+        .load::<(String, Option<String>)>(&mut c)
+    {
+        Ok(r) => r,
+        Err(e) => {
+            println!("{}", e);
+            panic!();
+        }
+    };
+    assert_eq!(
+        repos,
+        vec![(
+            "pub/test/mapped/43/x86_64/os".to_string(),
+            Some("mapped-43".to_string())
+        )]
+    );
+}
+
+#[test]
 fn scan_local_directory_fedora_linux_edges_test() {
     use std::fs;
     use std::fs::File;

@@ -899,7 +899,9 @@ fn find_repositories(p: &mut FindRepositories) -> Result<usize, Box<dyn Error>> 
             }
             let prefix = repo_prefix(with_topdir.clone(), version_name, p.rms, p.aliases);
             if prefix.is_empty() {
-                println!("Not able to determine prefix for {}", with_topdir.clone());
+                println!("Not able to determine prefix for {}", with_topdir);
+                println!("Not creating repository in database");
+                continue;
             }
             if !check_for_repo(p.repos, prefix.clone(), arch_id) {
                 if let Err(e) = db::functions::create_repository(
