@@ -46,3 +46,15 @@ CREATE TABLE arch (
     id serial NOT NULL,
     name text
 );
+
+DROP TABLE repository;
+CREATE TABLE repository (
+    id serial NOT NULL,
+    name text NOT NULL,
+    prefix text,
+    category_id integer,
+    version_id integer,
+    arch_id integer,
+    directory_id integer,
+    disabled boolean NOT NULL
+);
