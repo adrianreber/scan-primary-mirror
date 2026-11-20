@@ -1501,6 +1501,134 @@ fn find_repositories_no_prefix_test() {
 }
 
 #[test]
+fn find_repositories_existing_name_test() {
+    let mut c = match get_db_connection() {
+        Ok(c) => c,
+        Err(e) => {
+            println!("Database connection failed {}", e);
+            panic!();
+        }
+    };
+
+    // clean tables for test
+    assert!(diesel::delete(db::schema::version::dsl::version)
+        .execute(&mut c)
+        .is_ok());
+    assert!(diesel::delete(db::schema::repository::dsl::repository)
+        .execute(&mut c)
+        .is_ok());
+    assert!(diesel::delete(db::schema::arch::dsl::arch)
+        .execute(&mut c)
+        .is_ok());
+    let arch_id = match diesel::insert_into(db::schema::arch::dsl::arch)
+        .values(db::schema::arch::dsl::name.eq("x86_64"))
+        .returning(db::schema::arch::dsl::id)
+        .get_result::<i32>(&mut c)
+    {
+        Ok(id) => id,
+        Err(e) => {
+            println!("{}", e);
+            panic!();
+        }
+    };
+
+    // The repository for this directory exists with a prefix that the
+    // repository mapping below does not produce. The test database has no
+    // unique constraint on repository.name, so a second INSERT for the same
+    // directory would succeed and show up in the result.
+    let name = "pub/test/mapped/43/x86_64/os".to_string();
+    let existing = match diesel::insert_into(db::schema::repository::dsl::repository)
+        .values((
+            db::schema::repository::dsl::name.eq(&name),
+            db::schema::repository::dsl::prefix.eq("old-43"),
+            db::schema::repository::dsl::arch_id.eq(arch_id),
+            db::schema::repository::dsl::disabled.eq(false),
+        ))
+        .returning(db::schema::repository::dsl::id)
+        .get_result::<i32>(&mut c)
+    {
+        Ok(id) => id,
+        Err(e) => {
+            println!("{}", e);
+            panic!();
+        }
+    };
+    let repos = vec![db::models::Repository {
+        id: existing,
+        name: name.clone(),
+        prefix: Some("old-43".to_string()),
+        category_id: None,
+        version_id: None,
+        arch_id: Some(arch_id),
+        directory_id: None,
+        disabled: false,
+    }];
+
+    let mut cds: HashMap<String, CategoryDirectory> = HashMap::new();
+    for dir in ["mapped/43/x86_64/os", "mapped/43/x86_64/os/repodata"] {
+        cds.insert(
+            dir.to_string(),
+            CategoryDirectory {
+                ctime_changed: true,
+                ..Default::default()
+            },
+        );
+    }
+
+    let category = db::functions::Category {
+        id: 1,
+        name: "Category".to_string(),
+        topdir: "pub/test/".to_string(),
+        product_id: 5,
+    };
+
+    let rms = vec![settings::RepositoryMapping {
+        regex: "^pub/test/mapped/".to_string(),
+        prefix: "mapped".to_string(),
+        version_prefix: None,
+    }];
+
+    // No repomd.xml exists below this directory. Reading the file fails,
+    // and find_repositories() continues without file details.
+    let mut fds: Vec<db::models::FileDetail> = Vec::new();
+    let mut find_parameter = FindRepositories {
+        c: &mut c,
+        cds: &mut cds,
+        checksum_base: Some("test/existing-name/".to_string()),
+        top: "pub/test/".to_string(),
+        cat: &category,
+        repos: &repos,
+        rms: &rms,
+        fds: &mut fds,
+        skip_paths: &[],
+        test_paths: &[],
+        skip_repository_paths: &[],
+        do_not_display_paths: &[],
+        backend: "directory".to_string(),
+        aliases: &[],
+    };
+    if let Err(e) = find_repositories(&mut find_parameter) {
+        println!("Creating repositories in database failed {}", e);
+        panic!();
+    }
+
+    let result = match db::schema::repository::dsl::repository
+        .select((
+            db::schema::repository::dsl::name,
+            db::schema::repository::dsl::prefix,
+        ))
+        .load::<(String, Option<String>)>(&mut c)
+    {
+        Ok(r) => r,
+        Err(e) => {
+            println!("{}", e);
+            panic!();
+        }
+    };
+    assert_eq!(result, vec![(name, Some("old-43".to_string()))]);
+}
+
+#[test]
 fn scan_local_directory_fedora_linux_edges_test() {
     use std::fs;
     use std::fs::File;

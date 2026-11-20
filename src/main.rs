@@ -904,6 +904,22 @@ fn find_repositories(p: &mut FindRepositories) -> Result<usize, Box<dyn Error>> 
                 continue;
             }
             if !check_for_repo(p.repos, prefix.clone(), arch_id) {
+                // repository.name is unique, so the INSERT fails for a
+                // directory that already has a repository with another prefix
+                // or arch. A repository_mapping that produces a different
+                // prefix than the one in the database causes this.
+                if let Some(r) = p.repos.iter().find(|r| r.name == with_topdir) {
+                    println!(
+                        "Repository {} exists with prefix={}, arch={}, not prefix={}, arch={}. \
+                         Check repository_mapping. Skipping.",
+                        with_topdir,
+                        r.prefix.as_deref().unwrap_or("NULL"),
+                        r.arch_id.map_or("NULL".to_string(), |a| a.to_string()),
+                        prefix,
+                        arch_id
+                    );
+                    continue;
+                }
                 if let Err(e) = db::functions::create_repository(
                     p.c,
                     cd.directory_id,

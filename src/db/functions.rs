@@ -62,11 +62,12 @@ pub fn create_repository(
 
     let debug = diesel::debug_query::<diesel::pg::Pg, _>(&insert);
     print_step(debug.to_string());
+    let rows = insert.execute(c)?;
     println!(
         "Created Repository(prefix={}, version={}, arch={}, category={}) -> Directory {}",
         prefix, version_id, arch_id, cat_id, directory_id
     );
-    insert.execute(c)
+    Ok(rows)
 }
 
 /// Get the table `file_detail` from the database
