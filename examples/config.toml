@@ -168,6 +168,17 @@ prefix="nonfree-el-updates-testing"
 regex="^nonfree(-archive)?/el/releases/[\\.\\d]+/.*"
 prefix="nonfree-el"
 
+# A rawhide repository gets no version in its prefix. Only the first
+# repository_mapping that matches is used, so the rawhide mappings have to
+# come before the mappings below, which also match rawhide.
+[[repository_mapping]]
+regex="^free(-archive)?/fedora(-secondary)?/development/rawhide/.*"
+prefix="free-fedora-rawhide"
+
+[[repository_mapping]]
+regex="^nonfree(-archive)?/fedora(-secondary)?/development/rawhide/.*"
+prefix="nonfree-fedora-rawhide"
+
 [[repository_mapping]]
 regex="^free(-archive)?/fedora(-secondary)?/(releases|development)/(rawhide|[\\.\\d]+)/.*"
 prefix="free-fedora"

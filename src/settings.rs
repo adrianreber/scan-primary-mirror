@@ -38,8 +38,15 @@ pub struct RepositoryMapping {
     /// This is the corresponding prefix which should be used for the
     /// above mentioned `regex`.
     ///
-    /// The prefix will be followed by the version and optional by
-    /// `-debug` or `-source`.
+    /// The repository prefix consists of this prefix, `-debug` or `-source`
+    /// for a debug or source repository, and `-` followed by the version:
+    /// `free-fedora-updates-released-debug-43`. A rawhide repository (version
+    /// `development` in the database) gets no version, so a mapping with
+    /// `prefix="free-fedora-rawhide"` results in `free-fedora-rawhide-debug`.
+    ///
+    /// Only the first mapping whose `regex` matches is used. A mapping for
+    /// rawhide therefore has to come before a mapping whose `regex` also
+    /// matches rawhide.
     pub prefix: String,
     /// version_prefix: optional prefix for version in the resulting
     /// repository prefix. f35 instead of 35
