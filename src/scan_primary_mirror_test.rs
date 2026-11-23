@@ -979,6 +979,57 @@ fn get_details_test() {
 }
 
 #[test]
+fn get_details_without_timestamp_test() {
+    let tmp = std::env::temp_dir().join(format!("spm-no-timestamp-{}", std::process::id()));
+    std::fs::create_dir_all(&tmp).unwrap();
+    let base = Some(format!("{}/", tmp.display()));
+
+    for (name, content) in [
+        (
+            "error-page",
+            "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\">\n<html><head>\n<title>404 Not Found</title>\n</head><body>\n<h1>Not Found</h1>\n<hr>\n</body></html>\n",
+        ),
+        ("empty", ""),
+        ("no-data", "<repomd><revision>8.3</revision></repomd>"),
+        (
+            "bad-timestamp",
+            "<repomd><data><timestamp>r</timestamp></data></repomd>",
+        ),
+        (
+            "zero-timestamp",
+            "<repomd><data><timestamp>0</timestamp></data></repomd>",
+        ),
+    ] {
+        let dir = tmp.join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("repomd.xml"), content).unwrap();
+
+        assert!(
+            get_details(&base, name, "", "repomd.xml", "directory").is_err(),
+            "{} was accepted",
+            name
+        );
+
+        let mut ifds: Vec<db::models::InsertFileDetail> = Vec::new();
+        assert!(fill_ifds(&mut FillIfds {
+            ifds: &mut ifds,
+            target: "repomd.xml",
+            backend: "directory",
+            checksum_base: &base,
+            topdir: name,
+            dir: "",
+            d_id: 65,
+            fds: &[],
+            files: &None,
+        })
+        .is_ok());
+        assert_eq!(ifds.len(), 0, "{} created a file detail", name);
+    }
+
+    std::fs::remove_dir_all(&tmp).unwrap();
+}
+
+#[test]
 fn fill_ifds_test() {
     let mut ifds: Vec<db::models::InsertFileDetail> = Vec::new();
     let mut fds: Vec<db::models::FileDetail> = Vec::new();
