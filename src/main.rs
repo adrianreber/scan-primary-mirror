@@ -577,6 +577,18 @@ fn get_details(
 ) -> Result<Vec<DetailsResult>, Box<dyn Error>> {
     let (body, content_length) = get_file_content(checksum_base, topdir, dir, target, backend)?;
 
+    // A web server can answer with status 200 and an error or maintenance
+    // page. The checksums of that page in a metalink make every client
+    // reject the real repomd.xml of the mirrors.
+    let timestamp = xml::get_timestamp(body.clone());
+    if timestamp <= 0 {
+        return Err(format!(
+            "'{}{}/{}' is not a repomd.xml with a timestamp",
+            topdir, dir, target
+        )
+        .into());
+    }
+
     use md5::{Digest, Md5};
     use sha1::Sha1;
     use sha2::{Sha256, Sha512};
@@ -598,7 +610,7 @@ fn get_details(
         sha256_sum: to_hex(&sha256.finalize()),
         sha512_sum: to_hex(&sha512.finalize()),
         length: content_length,
-        timestamp: xml::get_timestamp(body),
+        timestamp,
         target: target.to_string(),
     }])
 }
